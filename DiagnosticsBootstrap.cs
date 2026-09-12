@@ -1,6 +1,8 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
@@ -19,6 +21,7 @@ internal static class DiagnosticsBootstrap
     private static int? lastEnergyBucket;
     private static bool? lastDragging;
     private static long lastStateChangeAt;
+    private static long lastObservedStateEndAt;
     private static long dragStartedAt;
     private static long nextSummaryAt;
     private static int clickCount;
@@ -27,7 +30,7 @@ internal static class DiagnosticsBootstrap
     [ModuleInitializer]
     internal static void InitializeModule()
     {
-        PetDiagnostics.Initialize("1.3");
+        PetDiagnostics.Initialize("1.4");
         Application.ThreadException += (_, e) => PetDiagnostics.Error("THREAD_EXCEPTION", e.Exception);
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
         {
@@ -45,12 +48,12 @@ internal static class DiagnosticsBootstrap
 
         Application.Idle -= StartPollingOnce;
 
-        pollTimer = new System.Windows.Forms.Timer { Interval = 250 };
+        pollTimer = new System.Windows.Forms.Timer { Interval = 200 };
         pollTimer.Tick += (_, _) => PollPet();
         pollTimer.Start();
 
         nextSummaryAt = Environment.TickCount64 + 30000;
-        PetDiagnostics.Log("DIAG_BOOTSTRAP", "pollMs=250 source=reflection");
+        PetDiagnostics.Log("DIAG_BOOTSTRAP", "pollMs=200 source=reflection atlasCompare=true");
     }
 
     private static void PollPet()
@@ -75,6 +78,7 @@ internal static class DiagnosticsBootstrap
             bool paused = GetField<bool>(type, petForm, "paused");
             int row = GetField<int>(type, petForm, "currentRow");
             int frame = GetField<int>(type, petForm, "frameIndex");
+            long stateEndsAt = GetField<long>(type, petForm, "stateEndsAt");
             long now = Environment.TickCount64;
 
             if (!string.Equals(lastPet, pet, StringComparison.Ordinal))
@@ -87,12 +91,24 @@ internal static class DiagnosticsBootstrap
             if (!string.Equals(lastState, state, StringComparison.Ordinal))
             {
                 long previousDuration = lastStateChangeAt == 0 ? 0 : Math.Max(0, now - lastStateChangeAt);
+                long previousRemaining = lastObservedStateEndAt == 0 ? 0 : lastObservedStateEndAt - now;
+                bool interrupted = lastStateChangeAt != 0 && previousRemaining > 150;
+                long plannedRemaining = Math.Max(0, stateEndsAt - now);
+
                 PetDiagnostics.Log(
                     "STATE",
-                    $"pet={pet} from={lastState ?? "startup"} to={state} previousMs={previousDuration} energy={energy} row={row} frame={frame} pos=({petForm.Left},{petForm.Top})"
+                    $"pet={pet} from={lastState ?? "startup"} to={state} previousMs={previousDuration} " +
+                    $"interruptedPrev={interrupted} prevRemainingMs={Math.Max(0, previousRemaining)} " +
+                    $"plannedMs={plannedRemaining} energy={energy} row={row} frame={frame} pos=({petForm.Left},{petForm.Top})"
                 );
+
                 lastState = state;
                 lastStateChangeAt = now;
+                lastObservedStateEndAt = stateEndsAt;
+            }
+            else
+            {
+                lastObservedStateEndAt = stateEndsAt;
             }
 
             int energyBucket = energy / 10;
@@ -123,7 +139,8 @@ internal static class DiagnosticsBootstrap
             {
                 PetDiagnostics.Log(
                     "SUMMARY",
-                    $"pet={pet} state={state} energy={energy} row={row} frame={frame} pos=({petForm.Left},{petForm.Top}) visible={petForm.Visible} paused={paused} clicks={clickCount} drags={dragCount}"
+                    $"pet={pet} state={state} energy={energy} row={row} frame={frame} pos=({petForm.Left},{petForm.Top}) " +
+                    $"visible={petForm.Visible} paused={paused} clicks={clickCount} drags={dragCount}"
                 );
                 nextSummaryAt = now + 30000;
             }
@@ -175,71 +192,167 @@ internal static class DiagnosticsBootstrap
 
             PetDiagnostics.Log("ATLAS_LOAD", $"pet={pet} size={atlas.Width}x{atlas.Height}");
 
-            const int cellWidth = 192;
-            const int cellHeight = 208;
-            int[] framesPerRow = { 6, 8, 8, 4, 5, 8, 6, 6, 6, 8, 8 };
+            Dictionary<(int Row, int Col), FrameBox> activeBoxes = MeasureAtlas(atlas, pet, logRows: true);
 
-            for (int row = 0; row < framesPerRow.Length; row++)
+            if (!pet.Equals("Merry", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            string marmaladePath = Path.Combine(AppContext.BaseDirectory, "Assets", "Marmalade", "spritesheet.png");
+            if (!File.Exists(marmaladePath))
             {
-                int minWidth = int.MaxValue;
-                int maxWidth = 0;
-                int minHeight = int.MaxValue;
-                int maxHeight = 0;
-                int measured = 0;
-
-                for (int col = 0; col < framesPerRow[row]; col++)
-                {
-                    Rectangle source = new(col * cellWidth, row * cellHeight, cellWidth, cellHeight);
-                    using Bitmap cell = atlas.Clone(source, PixelFormat.Format32bppArgb);
-
-                    int minX = cellWidth;
-                    int minY = cellHeight;
-                    int maxX = -1;
-                    int maxY = -1;
-
-                    for (int y = 0; y < cellHeight; y += 3)
-                    {
-                        for (int x = 0; x < cellWidth; x += 3)
-                        {
-                            if (cell.GetPixel(x, y).A < 24)
-                                continue;
-
-                            minX = Math.Min(minX, x);
-                            minY = Math.Min(minY, y);
-                            maxX = Math.Max(maxX, x);
-                            maxY = Math.Max(maxY, y);
-                        }
-                    }
-
-                    if (maxX < minX || maxY < minY)
-                        continue;
-
-                    int width = maxX - minX + 1;
-                    int height = maxY - minY + 1;
-                    minWidth = Math.Min(minWidth, width);
-                    maxWidth = Math.Max(maxWidth, width);
-                    minHeight = Math.Min(minHeight, height);
-                    maxHeight = Math.Max(maxHeight, height);
-                    measured++;
-                }
-
-                if (measured == 0)
-                    continue;
-
-                int widthSpread = maxWidth - minWidth;
-                int heightSpread = maxHeight - minHeight;
-                string flag = widthSpread > 24 || heightSpread > 24 ? "VARIATION" : "OK";
-
-                PetDiagnostics.Log(
-                    "ATLAS_ROW",
-                    $"pet={pet} row={row} frames={measured} w={minWidth}-{maxWidth} h={minHeight}-{maxHeight} flag={flag}"
-                );
+                PetDiagnostics.Log("ATLAS_COMPARE_SKIPPED", $"reason=marmalade_missing path={marmaladePath}");
+                return;
             }
+
+            using Bitmap marmaladeAtlas = new(marmaladePath);
+            Dictionary<(int Row, int Col), FrameBox> marmaladeBoxes = MeasureAtlas(marmaladeAtlas, "MarmaladeReference", logRows: false);
+            CompareAtlases(marmaladeBoxes, activeBoxes);
         }
         catch (Exception ex)
         {
             PetDiagnostics.Error("ATLAS_ANALYSIS_FAILED", ex);
         }
+    }
+
+    private static Dictionary<(int Row, int Col), FrameBox> MeasureAtlas(Bitmap atlas, string pet, bool logRows)
+    {
+        const int cellWidth = 192;
+        const int cellHeight = 208;
+        int[] framesPerRow = { 6, 8, 8, 4, 5, 8, 6, 6, 6, 8, 8 };
+        Dictionary<(int Row, int Col), FrameBox> result = new();
+
+        for (int row = 0; row < framesPerRow.Length; row++)
+        {
+            List<FrameBox> rowBoxes = new();
+
+            for (int col = 0; col < framesPerRow[row]; col++)
+            {
+                Rectangle source = new(col * cellWidth, row * cellHeight, cellWidth, cellHeight);
+                using Bitmap cell = atlas.Clone(source, PixelFormat.Format32bppArgb);
+                FrameBox? measured = MeasureFrame(cell);
+
+                if (measured is null)
+                    continue;
+
+                FrameBox box = measured.Value;
+                result[(row, col)] = box;
+                rowBoxes.Add(box);
+            }
+
+            if (!logRows || rowBoxes.Count == 0)
+                continue;
+
+            int minWidth = rowBoxes.Min(box => box.Width);
+            int maxWidth = rowBoxes.Max(box => box.Width);
+            int minHeight = rowBoxes.Min(box => box.Height);
+            int maxHeight = rowBoxes.Max(box => box.Height);
+            int widthSpread = maxWidth - minWidth;
+            int heightSpread = maxHeight - minHeight;
+            string flag = widthSpread > 24 || heightSpread > 24 ? "POSE_VARIATION" : "OK";
+
+            PetDiagnostics.Log(
+                "ATLAS_ROW",
+                $"pet={pet} row={row} frames={rowBoxes.Count} w={minWidth}-{maxWidth} h={minHeight}-{maxHeight} flag={flag}"
+            );
+        }
+
+        return result;
+    }
+
+    private static FrameBox? MeasureFrame(Bitmap cell)
+    {
+        int minX = cell.Width;
+        int minY = cell.Height;
+        int maxX = -1;
+        int maxY = -1;
+
+        for (int y = 0; y < cell.Height; y += 2)
+        {
+            for (int x = 0; x < cell.Width; x += 2)
+            {
+                if (cell.GetPixel(x, y).A < 24)
+                    continue;
+
+                minX = Math.Min(minX, x);
+                minY = Math.Min(minY, y);
+                maxX = Math.Max(maxX, x);
+                maxY = Math.Max(maxY, y);
+            }
+        }
+
+        if (maxX < minX || maxY < minY)
+            return null;
+
+        return new FrameBox(
+            minX,
+            minY,
+            maxX - minX + 1,
+            maxY - minY + 1
+        );
+    }
+
+    private static void CompareAtlases(
+        Dictionary<(int Row, int Col), FrameBox> reference,
+        Dictionary<(int Row, int Col), FrameBox> merry)
+    {
+        double worstSizeError = 0;
+        int worstRow = -1;
+        int worstCol = -1;
+        double sizeErrorSum = 0;
+        double centerErrorSum = 0;
+        double bottomErrorSum = 0;
+        int compared = 0;
+
+        foreach (KeyValuePair<(int Row, int Col), FrameBox> pair in reference)
+        {
+            if (!merry.TryGetValue(pair.Key, out FrameBox merryBox))
+                continue;
+
+            FrameBox refBox = pair.Value;
+            double widthError = Math.Abs(merryBox.Width - refBox.Width) / (double)Math.Max(1, refBox.Width);
+            double heightError = Math.Abs(merryBox.Height - refBox.Height) / (double)Math.Max(1, refBox.Height);
+            double sizeError = Math.Max(widthError, heightError);
+            double centerError = Math.Abs(merryBox.CenterX - refBox.CenterX);
+            double bottomError = Math.Abs(merryBox.Bottom - refBox.Bottom);
+
+            sizeErrorSum += sizeError;
+            centerErrorSum += centerError;
+            bottomErrorSum += bottomError;
+            compared++;
+
+            if (sizeError > worstSizeError)
+            {
+                worstSizeError = sizeError;
+                worstRow = pair.Key.Row;
+                worstCol = pair.Key.Col;
+            }
+
+            if (sizeError >= 0.10 || centerError >= 8 || bottomError >= 8)
+            {
+                PetDiagnostics.Log(
+                    "ATLAS_FRAME_DIFF",
+                    $"row={pair.Key.Row} col={pair.Key.Col} sizeErrorPct={sizeError * 100:F1} " +
+                    $"centerDx={merryBox.CenterX - refBox.CenterX:F1} bottomDy={merryBox.Bottom - refBox.Bottom} " +
+                    $"merry={merryBox.Width}x{merryBox.Height} ref={refBox.Width}x{refBox.Height}"
+                );
+            }
+        }
+
+        if (compared == 0)
+            return;
+
+        PetDiagnostics.Log(
+            "ATLAS_COMPARE",
+            $"frames={compared} avgSizeErrorPct={(sizeErrorSum / compared) * 100:F1} " +
+            $"avgCenterErrorPx={centerErrorSum / compared:F1} avgBottomErrorPx={bottomErrorSum / compared:F1} " +
+            $"worstSizeErrorPct={worstSizeError * 100:F1} worstFrame={worstRow}:{worstCol}"
+        );
+    }
+
+    private readonly record struct FrameBox(int X, int Y, int Width, int Height)
+    {
+        public double CenterX => X + Width / 2.0;
+        public int Bottom => Y + Height;
     }
 
     private static T GetField<T>(Type type, object instance, string name)
