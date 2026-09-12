@@ -11,6 +11,7 @@ A lightweight Windows desktop pet featuring Marmalade and Merry.
 - Click / pet reactions
 - Pickup dragging with airborne pose and landing reaction
 - Marmalade and Merry sprite atlases
+- Marmalade and Merry share identical behavior logic; only artwork and active pet identity differ
 - Runtime diagnostic logging
 - GitHub Actions Windows build check
 
@@ -62,5 +63,5 @@ The v1.4 diagnostic layer records:
 
 This lets animation cleanup target actual outlier frames instead of treating normal pose changes as errors.
 
-Current app behavior baseline: **v1.2**.
+Current app behavior baseline: **v1.4**.
 Current diagnostic layer: **v1.4**.

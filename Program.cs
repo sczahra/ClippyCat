@@ -74,9 +74,9 @@ internal sealed class PetApplicationContext : ApplicationContext
         aboutItem.Click += (_, _) =>
         {
             MessageBox.Show(
-                "Marmalade Desktop Pet\nVersion 1.2\n\n" +
-                "Adds petting streak reactions, a landing animation after pickup,\n" +
-                "and calmer, more personality-driven idle behavior.",
+                "Marmalade Desktop Pet\nVersion 1.4\n\n" +
+                "Marmalade and Merry now share the same behavior rules;\n" +
+                "their only difference is artwork and active pet identity.",
                 "About",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information
@@ -231,7 +231,6 @@ internal sealed class PetForm : Form
 
     public bool IsPaused => paused;
     public string ActivePetName { get; private set; } = "Marmalade";
-    private bool IsMerry => ActivePetName.Equals("Merry", StringComparison.OrdinalIgnoreCase);
 
     public PetForm()
     {
@@ -321,7 +320,7 @@ internal sealed class PetForm : Form
 
         LoadAtlas(petName);
         ActivePetName = petName;
-        energy = IsMerry ? 84 : 72;
+        energy = 72;
         paused = false;
 
         EnterIdle();
@@ -549,12 +548,12 @@ internal sealed class PetForm : Form
         {
             case PetState.WalkLeft:
             case PetState.WalkRight:
-                energy -= IsMerry ? 1 : 2;
+                energy -= 2;
                 break;
 
             case PetState.Jumping:
             case PetState.Pawing:
-                energy -= IsMerry ? 2 : 3;
+                energy -= 3;
                 break;
 
             case PetState.Waving:
@@ -564,7 +563,7 @@ internal sealed class PetForm : Form
                 break;
 
             case PetState.Resting:
-                energy += IsMerry ? 6 : 5;
+                energy += 5;
                 break;
 
             case PetState.Purring:
@@ -593,7 +592,7 @@ internal sealed class PetForm : Form
         if (now < nextCuriosityCheckAt || now < curiosityCooldownUntil)
             return;
 
-        nextCuriosityCheckAt = now + (IsMerry ? 500 : 650);
+        nextCuriosityCheckAt = now + 650;
 
         if (state == PetState.Resting)
             return;
@@ -610,10 +609,7 @@ internal sealed class PetForm : Form
         double dy = cursor.Y - center.Y;
         double distance = Math.Sqrt(dx * dx + dy * dy);
 
-        int attentionChance =
-            IsMerry
-                ? (energy > 45 ? 78 : 52)
-                : (energy > 55 ? 64 : 36);
+        int attentionChance = energy > 55 ? 64 : 36;
 
         if (distance <= 300 && random.Next(100) < attentionChance)
         {
@@ -623,7 +619,7 @@ internal sealed class PetForm : Form
         else if (energy > 42 &&
                  distance <= 600 &&
                  Math.Abs(dy) < 250 &&
-                 random.Next(100) < (IsMerry ? 26 : 17))
+                 random.Next(100) < 17)
         {
             if (cursor.X < center.X)
                 EnterShortCuriousWalkLeft();
@@ -644,21 +640,6 @@ internal sealed class PetForm : Form
             else if (tiredRoll < 72) EnterIdle();
             else if (tiredRoll < 88) EnterGrooming();
             else EnterWaiting();
-
-            return;
-        }
-
-        if (IsMerry && energy >= 60)
-        {
-            int merryRoll = random.Next(100);
-
-            if (merryRoll < 22) EnterWalkLeft();
-            else if (merryRoll < 44) EnterWalkRight();
-            else if (merryRoll < 58) EnterPawing();
-            else if (merryRoll < 70) EnterJumping();
-            else if (merryRoll < 80) EnterReview();
-            else if (merryRoll < 90) EnterWaving();
-            else EnterIdle();
 
             return;
         }
@@ -707,41 +688,41 @@ internal sealed class PetForm : Form
     }
 
     private void EnterIdle() =>
-        SetState(PetState.Idle, IdleRow, IdleFrames, 2500, IsMerry ? 5200 : 7000);
+        SetState(PetState.Idle, IdleRow, IdleFrames, 2500, 7000);
 
     private void EnterWalkLeft()
     {
-        movementSpeed = IsMerry ? random.Next(3, 5) : random.Next(2, 4);
+        movementSpeed = random.Next(2, 4);
         SetState(PetState.WalkLeft, RunLeftRow, RunFrames, 1500, 3900);
     }
 
     private void EnterWalkRight()
     {
-        movementSpeed = IsMerry ? random.Next(3, 5) : random.Next(2, 4);
+        movementSpeed = random.Next(2, 4);
         SetState(PetState.WalkRight, RunRightRow, RunFrames, 1500, 3900);
     }
 
     private void EnterShortCuriousWalkLeft()
     {
-        movementSpeed = IsMerry ? 3 : 2;
+        movementSpeed = 2;
         SetState(PetState.WalkLeft, RunLeftRow, RunFrames, 650, 1300);
     }
 
     private void EnterShortCuriousWalkRight()
     {
-        movementSpeed = IsMerry ? 3 : 2;
+        movementSpeed = 2;
         SetState(PetState.WalkRight, RunRightRow, RunFrames, 650, 1300);
     }
 
     private void EnterCalledWalkLeft()
     {
-        movementSpeed = IsMerry ? 5 : 4;
+        movementSpeed = 4;
         SetState(PetState.WalkLeft, RunLeftRow, RunFrames, 1200, 2400);
     }
 
     private void EnterCalledWalkRight()
     {
-        movementSpeed = IsMerry ? 5 : 4;
+        movementSpeed = 4;
         SetState(PetState.WalkRight, RunRightRow, RunFrames, 1200, 2400);
     }
 
@@ -834,8 +815,8 @@ internal sealed class PetForm : Form
 
     private int GetFrameDelay() => state switch
     {
-        PetState.WalkLeft => IsMerry ? 90 : 105,
-        PetState.WalkRight => IsMerry ? 90 : 105,
+        PetState.WalkLeft => 105,
+        PetState.WalkRight => 105,
         PetState.Waving => 180,
         PetState.Jumping => 160,
         PetState.Grooming => 230,
@@ -908,15 +889,7 @@ internal sealed class PetForm : Form
             return;
         }
 
-        if (IsMerry)
-        {
-            if (reaction < 34) EnterPawing();
-            else if (reaction < 58) EnterJumping();
-            else if (reaction < 78) EnterMouseLook();
-            else if (reaction < 92) EnterWaving();
-            else EnterGrooming();
-        }
-        else if (energy < 30)
+        if (energy < 30)
         {
             if (reaction < 50) EnterGrooming();
             else if (reaction < 80) EnterMouseLook();
