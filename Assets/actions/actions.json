@@ -6,7 +6,10 @@
   "baseRowCount": 11,
   "actions": [
     {
-      "name": "Stretch",
+      "id": "stretch",
+      "displayName": "Stretch",
+      "enabled": true,
+      "menuOrder": 10,
       "frameCount": 6,
       "frameMs": 220,
       "minDurationMs": 1800,
@@ -28,7 +31,10 @@
       }
     },
     {
-      "name": "Scratch",
+      "id": "scratch",
+      "displayName": "Scratch",
+      "enabled": true,
+      "menuOrder": 20,
       "frameCount": 8,
       "frameMs": 150,
       "minDurationMs": 1600,
@@ -50,7 +56,10 @@
       }
     },
     {
-      "name": "Yawn",
+      "id": "yawn",
+      "displayName": "Yawn",
+      "enabled": true,
+      "menuOrder": 30,
       "frameCount": 8,
       "frameMs": 220,
       "minDurationMs": 2200,
@@ -72,7 +81,10 @@
       }
     },
     {
-      "name": "SitSettle",
+      "id": "sit-settle",
+      "displayName": "Sit / Settle",
+      "enabled": true,
+      "menuOrder": 40,
       "frameCount": 6,
       "frameMs": 260,
       "minDurationMs": 2600,
@@ -94,7 +106,10 @@
       }
     },
     {
-      "name": "TailFlick",
+      "id": "tail-flick",
+      "displayName": "Tail Flick",
+      "enabled": true,
+      "menuOrder": 50,
       "frameCount": 6,
       "frameMs": 170,
       "minDurationMs": 1200,
@@ -116,7 +131,10 @@
       }
     },
     {
-      "name": "RollFlop",
+      "id": "roll-flop",
+      "displayName": "Roll / Flop",
+      "enabled": true,
+      "menuOrder": 60,
       "frameCount": 8,
       "frameMs": 230,
       "minDurationMs": 3000,

@@ -12,7 +12,7 @@ A lightweight Windows desktop pet featuring Marmalade and Merry.
 - Optional per-user Windows startup entry
 - Autonomous idle / walking / curiosity behaviors
 - Click / pet reactions
-- Manifest-driven dedicated action rows; Stretch works for Marmalade, while Scratch, Yawn, Sit/Settle, Tail Flick, and Roll/Flop work for both pets through the source-frame pipeline. Merry Stretch remains pending artwork.
+- Fully manifest-driven visual actions; Stretch works for Marmalade, while Scratch, Yawn, Sit/Settle, Tail Flick, and Roll/Flop work for both pets through the source-frame pipeline. Merry Stretch remains pending artwork.
 - Pickup dragging with airborne pose and landing reaction
 - Marmalade and Merry sprite atlases
 - Marmalade and Merry share identical behavior logic; only artwork and active pet identity differ
@@ -41,14 +41,17 @@ dotnet run
 dotnet build
 ```
 
-## Adding a new animation
+## Adding a visual action without code changes
 
-1. Create `Assets/actions/<Pet>/<action>/` and add sequential frame files named `0.png`, `1.png`, and so on. Frames must be transparent PNGs no larger than 192x208; smaller frames are centered without cropping.
-2. If the action name is new, add matching names to `PetAction` and `PetState`; then add or update its timing, frame count, atlas row, eligibility, and per-pet availability in `Assets/actions/actions.json`.
-3. Run `./Import-Actions.ps1 -WhatIf` to validate the manifest, source frames, and intended atlas changes without writing files.
-4. Run `./Import-Actions.ps1`, then `dotnet build` and test the action. `./Build-And-Run-Actions.ps1` performs those three steps together.
+1. Create `Assets/actions/<Pet>/<action-id>/` for each supported pet.
+2. Add sequential transparent RGBA PNG frames named `0.png`, `1.png`, and so on. Frames must be no larger than 192x208; smaller frames are centered without cropping.
+3. Add one entry to `Assets/actions/actions.json` with a stable lowercase kebab-case `id`, user-facing `displayName`, atlas row, frame/timing metadata, tray and Do Something eligibility, autonomous weight, and both pets' availability.
+4. Run `./Build-And-Run-Actions.ps1` to import the frames, build ClippyCat, and launch it.
+5. Test the tray command, Do Something eligibility, autonomous frequency, and both pets' availability behavior.
 
-If one pet has no approved artwork, leave that pet disabled in the manifest. Its direct tray command can remain visible and report that the animation is coming soon, while random and autonomous selection exclude it automatically.
+Ordinary stationary sprite actions require no `Program.cs` edit or enum addition. The tray, playback, Do Something pool, and autonomous pool discover them from the manifest. If one pet has no approved artwork, leave that pet disabled; its tray command remains visible and reports that the animation is coming soon, while random and autonomous selection exclude it automatically.
+
+Actions with custom movement or mechanics—such as mouse-directed travel, jumping physics, dragging, sounds, desktop interaction, or scripted paths—may still require code.
 
 ## Settings
 

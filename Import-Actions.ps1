@@ -17,6 +17,40 @@ function Assert-Valid {
     }
 }
 
+function Get-ActionId {
+    param([object]$Action)
+
+    $idProperty = $Action.PSObject.Properties["id"]
+    if ($null -ne $idProperty -and -not [string]::IsNullOrWhiteSpace([string]$idProperty.Value)) {
+        return ([string]$idProperty.Value).Trim()
+    }
+
+    $legacyProperty = $Action.PSObject.Properties["name"]
+    Assert-Valid ($null -ne $legacyProperty -and -not [string]::IsNullOrWhiteSpace([string]$legacyProperty.Value)) "Visual action id cannot be empty."
+    return ([string]$legacyProperty.Value).Trim()
+}
+
+function Get-ActionDisplayName {
+    param([object]$Action)
+
+    $displayProperty = $Action.PSObject.Properties["displayName"]
+    if ($null -ne $displayProperty -and -not [string]::IsNullOrWhiteSpace([string]$displayProperty.Value)) {
+        return ([string]$displayProperty.Value).Trim()
+    }
+
+    $idProperty = $Action.PSObject.Properties["id"]
+    $legacyProperty = $Action.PSObject.Properties["name"]
+    Assert-Valid ($null -eq $idProperty -and $null -ne $legacyProperty -and -not [string]::IsNullOrWhiteSpace([string]$legacyProperty.Value)) "Visual action '$(Get-ActionId $Action)' has no displayName."
+    return ([string]$legacyProperty.Value).Trim()
+}
+
+function Test-ActionEnabled {
+    param([object]$Action)
+
+    $enabledProperty = $Action.PSObject.Properties["enabled"]
+    return $null -eq $enabledProperty -or [bool]$enabledProperty.Value
+}
+
 function Get-PetConfig {
     param(
         [object]$Action,
@@ -27,7 +61,7 @@ function Get-PetConfig {
         Where-Object { $_.Name.Equals($PetName, [StringComparison]::OrdinalIgnoreCase) } |
         Select-Object -First 1
 
-    Assert-Valid ($null -ne $property) "Action '$($Action.name)' is missing pet configuration for '$PetName'."
+    Assert-Valid ($null -ne $property) "Action '$(Get-ActionId $Action)' is missing pet configuration for '$PetName'."
     return $property.Value
 }
 
@@ -179,12 +213,13 @@ function Update-PetAtlas {
         $assignedRows = @{}
 
         foreach ($action in $Manifest.actions) {
+            $actionId = Get-ActionId $action
             $pet = Get-PetConfig $action $PetName
             if ($null -ne $pet.atlasRow) {
                 $row = [int]$pet.atlasRow
-                Assert-Valid ($row -ge $baseRowCount) "Action '$($action.name)' attempts to use protected $PetName row $row."
+                Assert-Valid ($row -ge $baseRowCount) "Action '$actionId' attempts to use protected $PetName row $row."
                 Assert-Valid (-not $assignedRows.ContainsKey($row)) "$PetName row $row is assigned to more than one action."
-                $assignedRows[$row] = $action.name
+                $assignedRows[$row] = $actionId
             }
         }
 
@@ -206,10 +241,11 @@ function Update-PetAtlas {
         Copy-BitmapPixels $atlas $output $baseRectangle ([Drawing.Point]::Empty)
 
         foreach ($action in $Manifest.actions) {
+            $actionId = Get-ActionId $action
             $pet = Get-PetConfig $action $PetName
-            if (-not [bool]$pet.enabled) { continue }
+            if (-not (Test-ActionEnabled $action) -or -not [bool]$pet.enabled) { continue }
 
-            $sourceFolder = Get-SafeSourceFolder $ActionsRoot ([string]$pet.sourceFolder) ([string]$action.name) $PetName
+            $sourceFolder = Get-SafeSourceFolder $ActionsRoot ([string]$pet.sourceFolder) $actionId $PetName
             $targetRow = [int]$pet.atlasRow
 
             for ($index = 0; $index -lt [int]$action.frameCount; $index++) {
@@ -301,41 +337,57 @@ Assert-Valid ([int]$manifest.atlasColumns -gt 0) "atlasColumns must be positive.
 Assert-Valid ([int]$manifest.baseRowCount -gt 0) "baseRowCount must be positive."
 Assert-Valid ($manifest.actions.Count -gt 0) "Manifest contains no actions."
 
-$actionNames = @{}
+$actionIds = @{}
 $rowAssignments = @{}
 $autonomousTotals = @{}
 foreach ($petName in $petNames) { $autonomousTotals[$petName] = 0 }
 
 foreach ($action in $manifest.actions) {
-    $actionName = [string]$action.name
-    Assert-Valid (-not [string]::IsNullOrWhiteSpace($actionName)) "Action name cannot be empty."
-    Assert-Valid (-not $actionNames.ContainsKey($actionName.ToLowerInvariant())) "Duplicate action name: $actionName"
-    $actionNames[$actionName.ToLowerInvariant()] = $true
-
-    $enabledCount = 0
-    foreach ($petName in $petNames) {
-        $pet = Get-PetConfig $action $petName
-        if ($null -ne $pet.atlasRow) {
-            $row = [int]$pet.atlasRow
-            Assert-Valid ($row -ge [int]$manifest.baseRowCount) "Action '$actionName' attempts to use protected $petName row $row."
-            $rowKey = "$petName|$row"
-            Assert-Valid (-not $rowAssignments.ContainsKey($rowKey)) "$petName row $row is assigned more than once."
-            $rowAssignments[$rowKey] = $actionName
-        }
-
-        if ([bool]$pet.enabled) {
-            $enabledCount++
-            Assert-Valid ($null -ne $pet.atlasRow) "Enabled action '$actionName' has no atlasRow for '$petName'."
-            $autonomousTotals[$petName] += [int]$action.autonomousWeight
-        }
+    $actionId = Get-ActionId $action
+    $displayName = Get-ActionDisplayName $action
+    $idProperty = $action.PSObject.Properties["id"]
+    if ($null -ne $idProperty) {
+        Assert-Valid ($actionId -cmatch '^[a-z0-9]+(?:-[a-z0-9]+)*$') "Visual action id '$actionId' must use lowercase kebab-case."
     }
 
-    Assert-Valid ([int]$action.autonomousWeight -ge 0) "Action '$actionName' has a negative autonomousWeight."
-    if ($enabledCount -gt 0) {
-        Assert-Valid ([int]$action.frameCount -gt 0) "Enabled action '$actionName' must have a positive frameCount."
-        Assert-Valid ([int]$action.frameCount -le [int]$manifest.atlasColumns) "Action '$actionName' frameCount exceeds atlasColumns."
-        Assert-Valid ([int]$action.frameMs -gt 0) "Enabled action '$actionName' must have positive frameMs."
-        Assert-Valid ([int]$action.minDurationMs -gt 0 -and [int]$action.maxDurationMs -gt [int]$action.minDurationMs) "Enabled action '$actionName' has invalid duration bounds."
+    Assert-Valid (-not [string]::IsNullOrWhiteSpace($displayName)) "Visual action '$actionId' has no displayName."
+    Assert-Valid (-not $actionIds.ContainsKey($actionId.ToLowerInvariant())) "Duplicate visual action id: $actionId"
+    $actionIds[$actionId.ToLowerInvariant()] = $true
+
+    Assert-Valid ([int]$action.frameCount -gt 0) "Visual action '$actionId' must have a positive frameCount."
+    Assert-Valid ([int]$action.frameCount -le [int]$manifest.atlasColumns) "Visual action '$actionId' frameCount exceeds atlasColumns."
+    Assert-Valid ([int]$action.frameMs -gt 0) "Visual action '$actionId' must have positive frameMs."
+    Assert-Valid ([int]$action.minDurationMs -gt 0 -and [int]$action.maxDurationMs -gt [int]$action.minDurationMs) "Visual action '$actionId' has invalid duration bounds."
+    Assert-Valid ([int]$action.autonomousWeight -ge 0 -and [int]$action.autonomousWeight -le 12) "Visual action '$actionId' has an invalid autonomousWeight."
+
+    $menuOrderProperty = $action.PSObject.Properties["menuOrder"]
+    if ($null -ne $menuOrderProperty -and $null -ne $menuOrderProperty.Value) {
+        Assert-Valid ([int]$menuOrderProperty.Value -ge 0) "Visual action '$actionId' has an invalid menuOrder."
+    }
+
+    $petsProperty = $action.PSObject.Properties["pets"]
+    Assert-Valid ($null -ne $petsProperty -and $null -ne $petsProperty.Value) "Visual action '$actionId' has no pet availability metadata."
+    foreach ($configuredPet in $action.pets.PSObject.Properties) {
+        Assert-Valid ($petNames -contains $configuredPet.Name) "Visual action '$actionId' names unknown pet '$($configuredPet.Name)'."
+    }
+
+    $actionEnabled = Test-ActionEnabled $action
+    foreach ($petName in $petNames) {
+        $pet = Get-PetConfig $action $petName
+        Assert-Valid (-not [string]::IsNullOrWhiteSpace([string]$pet.sourceFolder)) "Visual action '$actionId' has no sourceFolder for '$petName'."
+
+        if ($null -ne $pet.atlasRow) {
+            $row = [int]$pet.atlasRow
+            Assert-Valid ($row -ge [int]$manifest.baseRowCount) "Visual action '$actionId' attempts to use protected $petName row $row."
+            $rowKey = "$petName|$row"
+            Assert-Valid (-not $rowAssignments.ContainsKey($rowKey)) "$petName row $row is assigned more than once."
+            $rowAssignments[$rowKey] = $actionId
+        }
+
+        if ($actionEnabled -and [bool]$pet.enabled) {
+            Assert-Valid ($null -ne $pet.atlasRow) "Enabled visual action '$actionId' has no atlasRow for '$petName'."
+            $autonomousTotals[$petName] += [int]$action.autonomousWeight
+        }
     }
 }
 
@@ -345,28 +397,34 @@ foreach ($petName in $petNames) {
 
 Write-Host "[3/5] Validating enabled source frames..."
 foreach ($action in $manifest.actions) {
+    $actionId = Get-ActionId $action
+    if (-not (Test-ActionEnabled $action)) {
+        Write-Host "  ${actionId}: disabled; no source frames imported."
+        continue
+    }
+
     foreach ($petName in $petNames) {
         $pet = Get-PetConfig $action $petName
-        $sourceFolder = Get-SafeSourceFolder $actionsRoot ([string]$pet.sourceFolder) ([string]$action.name) $petName
+        $sourceFolder = Get-SafeSourceFolder $actionsRoot ([string]$pet.sourceFolder) $actionId $petName
 
         if (-not [bool]$pet.enabled) {
             if (-not (Test-Path -LiteralPath $sourceFolder -PathType Container)) {
-                Write-Host "  $petName/$($action.name): pending; source folder is absent."
+                Write-Host "  $petName/${actionId}: pending; source folder is absent."
             }
             continue
         }
 
         Assert-Valid (Test-Path -LiteralPath $sourceFolder -PathType Container) "Enabled action source folder not found: $sourceFolder"
         $pngFiles = @(Get-ChildItem -LiteralPath $sourceFolder -File -Filter "*.png")
-        Assert-Valid ($pngFiles.Count -eq [int]$action.frameCount) "$petName/$($action.name) requires $($action.frameCount) PNG files, found $($pngFiles.Count)."
+        Assert-Valid ($pngFiles.Count -eq [int]$action.frameCount) "$petName/${actionId} requires $($action.frameCount) PNG files, found $($pngFiles.Count)."
 
         for ($index = 0; $index -lt [int]$action.frameCount; $index++) {
             $framePath = Join-Path $sourceFolder "$index.png"
-            Assert-Valid (Test-Path -LiteralPath $framePath -PathType Leaf) "$petName/$($action.name) is missing frame $index.png."
+            Assert-Valid (Test-Path -LiteralPath $framePath -PathType Leaf) "$petName/${actionId} is missing frame $index.png."
             Test-FramePng $framePath ([int]$manifest.cellWidth) ([int]$manifest.cellHeight)
         }
 
-        Write-Host "  $petName/$($action.name): $($action.frameCount) frames valid."
+        Write-Host "  $petName/${actionId}: $($action.frameCount) frames valid."
     }
 }
 

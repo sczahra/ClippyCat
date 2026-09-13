@@ -67,29 +67,15 @@ internal sealed class PetApplicationContext : ApplicationContext
         var restItem = new ToolStripMenuItem("Rest");
         restItem.Click += (_, _) => petForm.ForceRest();
 
-        var stretchItem = new ToolStripMenuItem("Stretch");
-        stretchItem.Click += (_, _) => petForm.TriggerAction(PetAction.Stretch);
-        stretchItem.Visible = petForm.IsActionTrayVisible(PetAction.Stretch);
-
-        var scratchItem = new ToolStripMenuItem("Scratch");
-        scratchItem.Click += (_, _) => petForm.TriggerAction(PetAction.Scratch);
-        scratchItem.Visible = petForm.IsActionTrayVisible(PetAction.Scratch);
-
-        var yawnItem = new ToolStripMenuItem("Yawn");
-        yawnItem.Click += (_, _) => petForm.TriggerAction(PetAction.Yawn);
-        yawnItem.Visible = petForm.IsActionTrayVisible(PetAction.Yawn);
-
-        var sitSettleItem = new ToolStripMenuItem("Sit / Settle");
-        sitSettleItem.Click += (_, _) => petForm.TriggerAction(PetAction.SitSettle);
-        sitSettleItem.Visible = petForm.IsActionTrayVisible(PetAction.SitSettle);
-
-        var tailFlickItem = new ToolStripMenuItem("Tail Flick");
-        tailFlickItem.Click += (_, _) => petForm.TriggerAction(PetAction.TailFlick);
-        tailFlickItem.Visible = petForm.IsActionTrayVisible(PetAction.TailFlick);
-
-        var rollFlopItem = new ToolStripMenuItem("Roll / Flop");
-        rollFlopItem.Click += (_, _) => petForm.TriggerAction(PetAction.RollFlop);
-        rollFlopItem.Visible = petForm.IsActionTrayVisible(PetAction.RollFlop);
+        ToolStripMenuItem[] visualActionItems = petForm.TrayVisualActions
+            .Select(definition =>
+            {
+                string actionId = definition.Id;
+                var item = new ToolStripMenuItem(definition.DisplayName);
+                item.Click += (_, _) => petForm.TriggerVisualAction(actionId);
+                return item;
+            })
+            .ToArray();
 
         var doSomethingItem = new ToolStripMenuItem("Do Something");
         doSomethingItem.Click += (_, _) => petForm.TriggerRandomAction();
@@ -101,9 +87,9 @@ internal sealed class PetApplicationContext : ApplicationContext
         aboutItem.Click += (_, _) =>
         {
             MessageBox.Show(
-                "Marmalade Desktop Pet\nVersion 2.2\n\n" +
-                "Adds Sit / Settle, Tail Flick, and Roll / Flop\n" +
-                "animations for Marmalade and Merry.",
+                "Marmalade Desktop Pet\nVersion 2.3\n\n" +
+                "Visual actions now load entirely from\n" +
+                "the action manifest and source-frame pipeline.",
                 "About",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information
@@ -119,12 +105,8 @@ internal sealed class PetApplicationContext : ApplicationContext
         trayMenu.Items.Add(pauseItem);
         trayMenu.Items.Add(callItem);
         trayMenu.Items.Add(restItem);
-        trayMenu.Items.Add(stretchItem);
-        trayMenu.Items.Add(scratchItem);
-        trayMenu.Items.Add(yawnItem);
-        trayMenu.Items.Add(sitSettleItem);
-        trayMenu.Items.Add(tailFlickItem);
-        trayMenu.Items.Add(rollFlopItem);
+        foreach (ToolStripMenuItem item in visualActionItems)
+            trayMenu.Items.Add(item);
         trayMenu.Items.Add(doSomethingItem);
         trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(settingsItem);
@@ -199,12 +181,7 @@ internal enum PetState
     Waving,
     Jumping,
     Grooming,
-    Stretch,
-    Scratch,
-    Yawn,
-    SitSettle,
-    TailFlick,
-    RollFlop,
+    VisualAction,
     Pawing,
     Review,
     Purring,
@@ -223,12 +200,6 @@ internal enum PetAction
     Wave,
     Jump,
     Groom,
-    Stretch,
-    Scratch,
-    Yawn,
-    SitSettle,
-    TailFlick,
-    RollFlop,
     Paw,
     Review
 }
@@ -240,12 +211,16 @@ internal sealed class ActionManifest
     public int CellHeight { get; set; }
     public int AtlasColumns { get; set; }
     public int BaseRowCount { get; set; }
-    public List<ActionDefinition> Actions { get; set; } = new();
+    public List<VisualActionDefinition> Actions { get; set; } = new();
 }
 
-internal sealed class ActionDefinition
+internal sealed class VisualActionDefinition
 {
+    public string Id { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
+    public bool Enabled { get; set; } = true;
+    public int? MenuOrder { get; set; }
     public int FrameCount { get; set; }
     public int FrameMs { get; set; }
     public int MinDurationMs { get; set; }
@@ -304,10 +279,11 @@ internal sealed class PetForm : Form
     private readonly System.Windows.Forms.Timer mainTimer;
     private readonly Random random = new();
     private readonly string settingsPath;
-    private readonly Dictionary<PetAction, ActionDefinition> actionDefinitions;
+    private readonly Dictionary<string, VisualActionDefinition> visualActionDefinitions;
     private PetSettings settings = new();
 
     private PetState state = PetState.Idle;
+    private VisualActionDefinition? activeVisualAction;
     private int currentRow = IdleRow;
     private int currentFrameCount = IdleFrames;
     private int frameIndex;
@@ -337,6 +313,9 @@ internal sealed class PetForm : Form
 
     public bool IsPaused => paused;
     public string ActivePetName { get; private set; } = "Marmalade";
+    public IEnumerable<VisualActionDefinition> TrayVisualActions => visualActionDefinitions.Values
+        .Where(definition => definition.Enabled && definition.TrayVisible)
+        .OrderBy(definition => definition.MenuOrder ?? int.MaxValue);
 
     public PetForm()
     {
@@ -347,7 +326,7 @@ internal sealed class PetForm : Form
         Width = CellWidth;
         Height = CellHeight;
 
-        actionDefinitions = LoadActionDefinitions();
+        visualActionDefinitions = LoadVisualActionDefinitions();
 
         settingsPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -561,28 +540,38 @@ internal sealed class PetForm : Form
         RenderCurrentFrame(true);
     }
 
-    public bool IsActionTrayVisible(PetAction action) =>
-        !actionDefinitions.TryGetValue(action, out ActionDefinition? definition) || definition.TrayVisible;
+    public void TriggerVisualAction(string actionId)
+    {
+        if (!Visible)
+            Show();
+
+        PerformVisualAction(actionId, showPending: true);
+        RenderCurrentFrame(true);
+    }
 
     public void TriggerRandomAction()
     {
-        PetAction[] definedActions = actionDefinitions
-            .Where(pair => pair.Value.RandomEligible && IsActionAvailable(pair.Key))
-            .Select(pair => pair.Key)
+        VisualActionDefinition[] visualActions = visualActionDefinitions.Values
+            .Where(definition => definition.Enabled &&
+                                 definition.RandomEligible &&
+                                 IsVisualActionAvailable(definition))
             .ToArray();
 
-        int selection = random.Next(5 + definedActions.Length);
-        PetAction action = selection switch
+        int selection = random.Next(5 + visualActions.Length);
+        if (selection >= 5)
+        {
+            TriggerVisualAction(visualActions[selection - 5].Id);
+            return;
+        }
+
+        TriggerAction(selection switch
         {
             0 => PetAction.Wave,
             1 => PetAction.Jump,
             2 => PetAction.Groom,
             3 => PetAction.Paw,
-            4 => PetAction.Review,
-            _ => definedActions[selection - 5]
-        };
-
-        TriggerAction(action);
+            _ => PetAction.Review
+        });
     }
 
     protected override CreateParams CreateParams
@@ -655,9 +644,16 @@ internal sealed class PetForm : Form
         Location = new Point(x, working.Bottom - Height);
     }
 
-    private static Dictionary<PetAction, ActionDefinition> LoadActionDefinitions()
+    private static Dictionary<string, VisualActionDefinition> LoadVisualActionDefinitions(
+        string? manifestPath = null
+    )
     {
-        string path = Path.Combine(AppContext.BaseDirectory, "Assets", "actions", "actions.json");
+        string path = manifestPath ?? Path.Combine(
+            AppContext.BaseDirectory,
+            "Assets",
+            "actions",
+            "actions.json"
+        );
 
         try
         {
@@ -680,29 +676,124 @@ internal sealed class PetForm : Form
                 throw new InvalidDataException("Action manifest atlas dimensions do not match the app.");
             }
 
-            var definitions = new Dictionary<PetAction, ActionDefinition>();
+            if (manifest.BaseRowCount <= 0 || manifest.Actions is null)
+                throw new InvalidDataException("Action manifest structure is invalid.");
 
-            foreach (ActionDefinition definition in manifest.Actions)
+            string[] petNames = { "Marmalade", "Merry" };
+            var definitions = new Dictionary<string, VisualActionDefinition>(
+                StringComparer.OrdinalIgnoreCase
+            );
+            var rowAssignments = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var autonomousTotals = petNames.ToDictionary(name => name, _ => 0);
+            var warnings = new List<string>();
+
+            for (int index = 0; index < manifest.Actions.Count; index++)
             {
-                if (!Enum.TryParse(definition.Name, true, out PetAction action))
-                    throw new InvalidDataException($"Unknown manifest action '{definition.Name}'.");
+                VisualActionDefinition definition = manifest.Actions[index];
 
-                definition.Pets = new Dictionary<string, ActionPetDefinition>(
-                    definition.Pets,
-                    StringComparer.OrdinalIgnoreCase
-                );
-
-                if (!definitions.TryAdd(action, definition))
-                    throw new InvalidDataException($"Duplicate manifest action '{definition.Name}'.");
-
-                if (definition.Pets.Values.Any(pet => pet.Enabled) &&
-                    (definition.FrameCount <= 0 ||
-                     definition.FrameMs <= 0 ||
-                     definition.MinDurationMs <= 0 ||
-                     definition.MaxDurationMs <= definition.MinDurationMs))
+                try
                 {
-                    throw new InvalidDataException($"Enabled action '{definition.Name}' has invalid timing metadata.");
+                    bool usesLegacyName = string.IsNullOrWhiteSpace(definition.Id);
+                    string id = usesLegacyName ? definition.Name.Trim() : definition.Id.Trim();
+                    string displayName = !string.IsNullOrWhiteSpace(definition.DisplayName)
+                        ? definition.DisplayName.Trim()
+                        : usesLegacyName ? definition.Name.Trim() : string.Empty;
+
+                    if (string.IsNullOrWhiteSpace(id))
+                        throw new InvalidDataException("Visual action id cannot be empty.");
+                    if (!usesLegacyName && !IsValidVisualActionId(id))
+                        throw new InvalidDataException($"Visual action id '{id}' must use lowercase kebab-case.");
+                    if (string.IsNullOrWhiteSpace(displayName))
+                        throw new InvalidDataException($"Visual action '{id}' has no displayName.");
+                    if (definitions.ContainsKey(id))
+                        throw new InvalidDataException($"Duplicate visual action id '{id}'.");
+                    if (definition.FrameCount <= 0 || definition.FrameCount > manifest.AtlasColumns)
+                        throw new InvalidDataException($"Visual action '{id}' has an invalid frameCount.");
+                    if (definition.FrameMs <= 0 ||
+                        definition.MinDurationMs <= 0 ||
+                        definition.MaxDurationMs <= definition.MinDurationMs)
+                    {
+                        throw new InvalidDataException($"Visual action '{id}' has invalid timing metadata.");
+                    }
+                    if (definition.AutonomousWeight < 0 || definition.AutonomousWeight > 12)
+                        throw new InvalidDataException($"Visual action '{id}' has an invalid autonomousWeight.");
+                    if (definition.MenuOrder < 0)
+                        throw new InvalidDataException($"Visual action '{id}' has an invalid menuOrder.");
+                    if (definition.Pets is null)
+                        throw new InvalidDataException($"Visual action '{id}' has no pet availability metadata.");
+
+                    foreach (string configuredPet in definition.Pets.Keys)
+                    {
+                        if (!petNames.Contains(configuredPet, StringComparer.OrdinalIgnoreCase))
+                            throw new InvalidDataException($"Visual action '{id}' names unknown pet '{configuredPet}'.");
+                    }
+
+                    definition.Pets = new Dictionary<string, ActionPetDefinition>(
+                        definition.Pets,
+                        StringComparer.OrdinalIgnoreCase
+                    );
+
+                    var pendingRows = new List<(string Key, string PetName)>();
+                    var pendingAutonomousTotals = new Dictionary<string, int>(autonomousTotals);
+
+                    foreach (string petName in petNames)
+                    {
+                        if (!definition.Pets.TryGetValue(petName, out ActionPetDefinition? pet))
+                            throw new InvalidDataException($"Visual action '{id}' is missing pet configuration for '{petName}'.");
+                        if (string.IsNullOrWhiteSpace(pet.SourceFolder))
+                            throw new InvalidDataException($"Visual action '{id}' has no sourceFolder for '{petName}'.");
+                        if (pet.AtlasRow.HasValue && pet.AtlasRow.Value < manifest.BaseRowCount)
+                            throw new InvalidDataException($"Visual action '{id}' uses protected {petName} row {pet.AtlasRow.Value}.");
+                        if (definition.Enabled && pet.Enabled && !pet.AtlasRow.HasValue)
+                            throw new InvalidDataException($"Enabled visual action '{id}' has no atlasRow for '{petName}'.");
+
+                        if (pet.AtlasRow.HasValue)
+                        {
+                            string rowKey = $"{petName}|{pet.AtlasRow.Value}";
+                            if (rowAssignments.TryGetValue(rowKey, out string? assignedId))
+                            {
+                                throw new InvalidDataException(
+                                    $"{petName} row {pet.AtlasRow.Value} is already assigned to '{assignedId}'."
+                                );
+                            }
+
+                            pendingRows.Add((rowKey, petName));
+                        }
+
+                        if (definition.Enabled && pet.Enabled)
+                        {
+                            pendingAutonomousTotals[petName] += definition.AutonomousWeight;
+                            if (pendingAutonomousTotals[petName] > 12)
+                            {
+                                throw new InvalidDataException(
+                                    $"{petName} autonomous visual-action weights exceed 12."
+                                );
+                            }
+                        }
+                    }
+
+                    definition.Id = id;
+                    definition.DisplayName = displayName;
+                    definitions.Add(id, definition);
+                    autonomousTotals = pendingAutonomousTotals;
+
+                    foreach (var pendingRow in pendingRows)
+                        rowAssignments.Add(pendingRow.Key, id);
                 }
+                catch (Exception ex)
+                {
+                    warnings.Add($"Entry {index + 1}: {ex.Message}");
+                }
+            }
+
+            if (warnings.Count > 0)
+            {
+                MessageBox.Show(
+                    "Some optional visual actions were skipped:\n\n" + string.Join("\n", warnings),
+                    "ClippyCat Action Manifest",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
             }
 
             return definitions;
@@ -716,8 +807,20 @@ internal sealed class PetForm : Form
                 MessageBoxIcon.Warning
             );
 
-            return new Dictionary<PetAction, ActionDefinition>();
+            return new Dictionary<string, VisualActionDefinition>(StringComparer.OrdinalIgnoreCase);
         }
+    }
+
+    private static bool IsValidVisualActionId(string id)
+    {
+        if (id.Length == 0 || id[0] == '-' || id[^1] == '-' || id.Contains("--"))
+            return false;
+
+        return id.All(character =>
+            character is >= 'a' and <= 'z' ||
+            character is >= '0' and <= '9' ||
+            character == '-'
+        );
     }
 
     private bool PetAssetExists(string petName)
@@ -852,12 +955,7 @@ internal sealed class PetForm : Form
 
             case PetState.Waving:
             case PetState.Review:
-            case PetState.Stretch:
-            case PetState.Scratch:
-            case PetState.Yawn:
-            case PetState.SitSettle:
-            case PetState.TailFlick:
-            case PetState.RollFlop:
+            case PetState.VisualAction:
             case PetState.Landing:
                 energy -= 1;
                 break;
@@ -932,95 +1030,82 @@ internal sealed class PetForm : Form
 
     private void ChooseNextState()
     {
-        PerformPetAction(SelectNextAutonomousAction());
+        (PetAction builtInAction, string? visualActionId) = SelectNextAutonomousAction();
+
+        if (visualActionId is not null)
+            PerformVisualAction(visualActionId, showPending: false);
+        else
+            PerformPetAction(builtInAction);
     }
 
-    private PetAction SelectNextAutonomousAction()
+    private (PetAction BuiltInAction, string? VisualActionId) SelectNextAutonomousAction()
     {
         if (energy <= 25)
         {
             int tiredRoll = random.Next(100);
 
-            if (tiredRoll < 52) return PetAction.Rest;
-            if (tiredRoll < 72) return PetAction.Idle;
-            if (tiredRoll < 88) return PetAction.Groom;
-            return PetAction.Wait;
+            if (tiredRoll < 52) return (PetAction.Rest, null);
+            if (tiredRoll < 72) return (PetAction.Idle, null);
+            if (tiredRoll < 88) return (PetAction.Groom, null);
+            return (PetAction.Wait, null);
         }
 
         if (energy >= 75)
         {
             int activeRoll = random.Next(100);
 
-            if (activeRoll < 22) return PetAction.WalkLeft;
-            if (activeRoll < 44) return PetAction.WalkRight;
-            if (activeRoll < 56) return PetAction.Paw;
-            if (activeRoll < 68) return PetAction.Jump;
-            if (activeRoll < 78) return PetAction.Wave;
-            if (activeRoll < 88) return PetAction.Review;
-            return SelectIdleOrDefinedAction(activeRoll - 88, 12);
+            if (activeRoll < 22) return (PetAction.WalkLeft, null);
+            if (activeRoll < 44) return (PetAction.WalkRight, null);
+            if (activeRoll < 56) return (PetAction.Paw, null);
+            if (activeRoll < 68) return (PetAction.Jump, null);
+            if (activeRoll < 78) return (PetAction.Wave, null);
+            if (activeRoll < 88) return (PetAction.Review, null);
+            return SelectIdleOrVisualAction(activeRoll - 88, 12);
         }
 
         int roll = random.Next(100);
 
         if (roll < 34)
-            return SelectIdleOrDefinedAction(roll, 34);
-        if (roll < 46) return PetAction.WalkLeft;
-        if (roll < 58) return PetAction.WalkRight;
-        if (roll < 69) return PetAction.Wait;
-        if (roll < 79) return PetAction.Review;
-        if (roll < 88) return PetAction.Groom;
-        if (roll < 93) return PetAction.Paw;
-        if (roll < 97) return PetAction.Wave;
-        return PetAction.Jump;
+            return SelectIdleOrVisualAction(roll, 34);
+        if (roll < 46) return (PetAction.WalkLeft, null);
+        if (roll < 58) return (PetAction.WalkRight, null);
+        if (roll < 69) return (PetAction.Wait, null);
+        if (roll < 79) return (PetAction.Review, null);
+        if (roll < 88) return (PetAction.Groom, null);
+        if (roll < 93) return (PetAction.Paw, null);
+        if (roll < 97) return (PetAction.Wave, null);
+        return (PetAction.Jump, null);
     }
 
-    private PetAction SelectIdleOrDefinedAction(int idleRoll, int idleBucketSize)
+    private (PetAction BuiltInAction, string? VisualActionId) SelectIdleOrVisualAction(
+        int idleRoll,
+        int idleBucketSize
+    )
     {
-        KeyValuePair<PetAction, ActionDefinition>[] eligibleActions = actionDefinitions
-            .Where(pair => pair.Value.AutonomousWeight > 0 && IsActionAvailable(pair.Key))
+        VisualActionDefinition[] eligibleActions = visualActionDefinitions.Values
+            .Where(definition => definition.Enabled &&
+                                 definition.AutonomousWeight > 0 &&
+                                 IsVisualActionAvailable(definition))
             .ToArray();
-        int totalActionWeight = eligibleActions.Sum(pair => pair.Value.AutonomousWeight);
+        int totalActionWeight = eligibleActions.Sum(definition => definition.AutonomousWeight);
 
         if (idleRoll < idleBucketSize - totalActionWeight)
-            return PetAction.Idle;
+            return (PetAction.Idle, null);
 
         int actionRoll = idleRoll - (idleBucketSize - totalActionWeight);
-        foreach (KeyValuePair<PetAction, ActionDefinition> pair in eligibleActions)
+        foreach (VisualActionDefinition definition in eligibleActions)
         {
-            if (actionRoll < pair.Value.AutonomousWeight)
-                return pair.Key;
+            if (actionRoll < definition.AutonomousWeight)
+                return (PetAction.Idle, definition.Id);
 
-            actionRoll -= pair.Value.AutonomousWeight;
+            actionRoll -= definition.AutonomousWeight;
         }
 
-        return PetAction.Idle;
+        return (PetAction.Idle, null);
     }
 
     private void PerformPetAction(PetAction action)
     {
-        if (actionDefinitions.TryGetValue(action, out ActionDefinition? definition))
-        {
-            if (TryGetEnabledAction(action, out definition, out ActionPetDefinition? pet))
-            {
-                if (!Enum.TryParse(definition.Name, true, out PetState definedState))
-                    throw new InvalidOperationException($"Action '{definition.Name}' has no matching PetState.");
-
-                SetState(
-                    definedState,
-                    pet.AtlasRow!.Value,
-                    definition.FrameCount,
-                    definition.MinDurationMs,
-                    definition.MaxDurationMs
-                );
-            }
-            else
-            {
-                ShowPendingAnimation(definition.Name);
-            }
-
-            return;
-        }
-
         switch (action)
         {
             case PetAction.Idle: EnterIdle(); break;
@@ -1033,39 +1118,56 @@ internal sealed class PetForm : Form
             case PetAction.Groom: EnterGrooming(); break;
             case PetAction.Paw: EnterPawing(); break;
             case PetAction.Review: EnterReview(); break;
-            case PetAction.Stretch:
-            case PetAction.Scratch:
-            case PetAction.Yawn:
-            case PetAction.SitSettle:
-            case PetAction.TailFlick:
-            case PetAction.RollFlop:
-                ShowPendingAnimation(action.ToString());
-                break;
             default: throw new ArgumentOutOfRangeException(nameof(action));
         }
     }
 
-    private bool IsActionAvailable(PetAction action) =>
-        TryGetEnabledAction(action, out _, out _);
+    private void PerformVisualAction(string actionId, bool showPending)
+    {
+        if (!visualActionDefinitions.TryGetValue(actionId, out VisualActionDefinition? definition) ||
+            !definition.Enabled)
+        {
+            if (showPending)
+                ShowPendingAnimation(actionId);
 
-    private bool TryGetEnabledAction(
-        PetAction action,
-        out ActionDefinition definition,
+            return;
+        }
+
+        if (TryGetEnabledVisualAction(definition, out ActionPetDefinition? pet))
+        {
+            SetState(
+                PetState.VisualAction,
+                pet.AtlasRow!.Value,
+                definition.FrameCount,
+                definition.MinDurationMs,
+                definition.MaxDurationMs,
+                definition
+            );
+        }
+        else if (showPending)
+        {
+            ShowPendingAnimation(definition.DisplayName);
+        }
+    }
+
+    private bool IsVisualActionAvailable(VisualActionDefinition definition) =>
+        TryGetEnabledVisualAction(definition, out _);
+
+    private bool TryGetEnabledVisualAction(
+        VisualActionDefinition definition,
         out ActionPetDefinition pet
     )
     {
-        definition = null!;
         pet = null!;
 
-        if (!actionDefinitions.TryGetValue(action, out ActionDefinition? foundDefinition) ||
-            !foundDefinition.Pets.TryGetValue(ActivePetName, out ActionPetDefinition? foundPet) ||
+        if (!definition.Enabled ||
+            !definition.Pets.TryGetValue(ActivePetName, out ActionPetDefinition? foundPet) ||
             !foundPet.Enabled ||
             !foundPet.AtlasRow.HasValue)
         {
             return false;
         }
 
-        definition = foundDefinition;
         pet = foundPet;
         return true;
     }
@@ -1081,9 +1183,17 @@ internal sealed class PetForm : Form
         );
     }
 
-    private void SetState(PetState newState, int row, int frames, int minMs, int maxMs)
+    private void SetState(
+        PetState newState,
+        int row,
+        int frames,
+        int minMs,
+        int maxMs,
+        VisualActionDefinition? visualAction = null
+    )
     {
         state = newState;
+        activeVisualAction = visualAction;
         currentRow = row;
         currentFrameCount = frames;
         frameIndex = 0;
@@ -1168,6 +1278,7 @@ internal sealed class PetForm : Form
     private void EnterLanding()
     {
         state = PetState.Landing;
+        activeVisualAction = null;
         currentRow = JumpingRow;
         currentFrameCount = JumpingFrames;
         frameIndex = JumpingFrames - 1;
@@ -1186,6 +1297,7 @@ internal sealed class PetForm : Form
     private void EnterMouseLook()
     {
         state = PetState.LookingAtMouse;
+        activeVisualAction = null;
         stateEndsAt = Environment.TickCount64 + random.Next(900, 1900);
         lastRenderedRow = -1;
         lastRenderedFrame = -1;
@@ -1194,6 +1306,7 @@ internal sealed class PetForm : Form
     private void EnterDragging()
     {
         state = PetState.Dragging;
+        activeVisualAction = null;
         dragSwingX = 0;
         lastRenderedRow = -1;
         lastRenderedFrame = -1;
@@ -1233,11 +1346,8 @@ internal sealed class PetForm : Form
 
     private int GetFrameDelay()
     {
-        if (Enum.TryParse(state.ToString(), true, out PetAction action) &&
-            TryGetEnabledAction(action, out ActionDefinition definition, out _))
-        {
-            return definition.FrameMs;
-        }
+        if (state == PetState.VisualAction && activeVisualAction is not null)
+            return activeVisualAction.FrameMs;
 
         return state switch
         {
