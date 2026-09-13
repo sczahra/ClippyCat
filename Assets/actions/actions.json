@@ -70,6 +70,72 @@
           "sourceFolder": "Merry/yawn"
         }
       }
+    },
+    {
+      "name": "SitSettle",
+      "frameCount": 6,
+      "frameMs": 260,
+      "minDurationMs": 2600,
+      "maxDurationMs": 4200,
+      "autonomousWeight": 1,
+      "trayVisible": true,
+      "randomEligible": true,
+      "pets": {
+        "Marmalade": {
+          "enabled": true,
+          "atlasRow": 14,
+          "sourceFolder": "Marmalade/sit-settle"
+        },
+        "Merry": {
+          "enabled": true,
+          "atlasRow": 14,
+          "sourceFolder": "Merry/sit-settle"
+        }
+      }
+    },
+    {
+      "name": "TailFlick",
+      "frameCount": 6,
+      "frameMs": 170,
+      "minDurationMs": 1200,
+      "maxDurationMs": 2200,
+      "autonomousWeight": 2,
+      "trayVisible": true,
+      "randomEligible": true,
+      "pets": {
+        "Marmalade": {
+          "enabled": true,
+          "atlasRow": 15,
+          "sourceFolder": "Marmalade/tail-flick"
+        },
+        "Merry": {
+          "enabled": true,
+          "atlasRow": 15,
+          "sourceFolder": "Merry/tail-flick"
+        }
+      }
+    },
+    {
+      "name": "RollFlop",
+      "frameCount": 8,
+      "frameMs": 230,
+      "minDurationMs": 3000,
+      "maxDurationMs": 5200,
+      "autonomousWeight": 1,
+      "trayVisible": true,
+      "randomEligible": true,
+      "pets": {
+        "Marmalade": {
+          "enabled": true,
+          "atlasRow": 16,
+          "sourceFolder": "Marmalade/roll-flop"
+        },
+        "Merry": {
+          "enabled": true,
+          "atlasRow": 16,
+          "sourceFolder": "Merry/roll-flop"
+        }
+      }
     }
   ]
 }

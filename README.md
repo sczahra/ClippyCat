@@ -12,7 +12,7 @@ A lightweight Windows desktop pet featuring Marmalade and Merry.
 - Optional per-user Windows startup entry
 - Autonomous idle / walking / curiosity behaviors
 - Click / pet reactions
-- Manifest-driven dedicated action rows; Marmalade Stretch remains available, Scratch now works for both pets, Yawn is implemented for Marmalade and Merry through the source-frame pipeline, and Merry Stretch remains pending artwork
+- Manifest-driven dedicated action rows; Stretch works for Marmalade, while Scratch, Yawn, Sit/Settle, Tail Flick, and Roll/Flop work for both pets through the source-frame pipeline. Merry Stretch remains pending artwork.
 - Pickup dragging with airborne pose and landing reaction
 - Marmalade and Merry sprite atlases
 - Marmalade and Merry share identical behavior logic; only artwork and active pet identity differ

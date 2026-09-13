@@ -79,6 +79,18 @@ internal sealed class PetApplicationContext : ApplicationContext
         yawnItem.Click += (_, _) => petForm.TriggerAction(PetAction.Yawn);
         yawnItem.Visible = petForm.IsActionTrayVisible(PetAction.Yawn);
 
+        var sitSettleItem = new ToolStripMenuItem("Sit / Settle");
+        sitSettleItem.Click += (_, _) => petForm.TriggerAction(PetAction.SitSettle);
+        sitSettleItem.Visible = petForm.IsActionTrayVisible(PetAction.SitSettle);
+
+        var tailFlickItem = new ToolStripMenuItem("Tail Flick");
+        tailFlickItem.Click += (_, _) => petForm.TriggerAction(PetAction.TailFlick);
+        tailFlickItem.Visible = petForm.IsActionTrayVisible(PetAction.TailFlick);
+
+        var rollFlopItem = new ToolStripMenuItem("Roll / Flop");
+        rollFlopItem.Click += (_, _) => petForm.TriggerAction(PetAction.RollFlop);
+        rollFlopItem.Visible = petForm.IsActionTrayVisible(PetAction.RollFlop);
+
         var doSomethingItem = new ToolStripMenuItem("Do Something");
         doSomethingItem.Click += (_, _) => petForm.TriggerRandomAction();
 
@@ -89,9 +101,9 @@ internal sealed class PetApplicationContext : ApplicationContext
         aboutItem.Click += (_, _) =>
         {
             MessageBox.Show(
-                "Marmalade Desktop Pet\nVersion 2.1\n\n" +
-                "Adds Merry Scratch and dedicated Yawn\n" +
-                "animations through the action pipeline.",
+                "Marmalade Desktop Pet\nVersion 2.2\n\n" +
+                "Adds Sit / Settle, Tail Flick, and Roll / Flop\n" +
+                "animations for Marmalade and Merry.",
                 "About",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information
@@ -110,6 +122,9 @@ internal sealed class PetApplicationContext : ApplicationContext
         trayMenu.Items.Add(stretchItem);
         trayMenu.Items.Add(scratchItem);
         trayMenu.Items.Add(yawnItem);
+        trayMenu.Items.Add(sitSettleItem);
+        trayMenu.Items.Add(tailFlickItem);
+        trayMenu.Items.Add(rollFlopItem);
         trayMenu.Items.Add(doSomethingItem);
         trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(settingsItem);
@@ -187,6 +202,9 @@ internal enum PetState
     Stretch,
     Scratch,
     Yawn,
+    SitSettle,
+    TailFlick,
+    RollFlop,
     Pawing,
     Review,
     Purring,
@@ -208,6 +226,9 @@ internal enum PetAction
     Stretch,
     Scratch,
     Yawn,
+    SitSettle,
+    TailFlick,
+    RollFlop,
     Paw,
     Review
 }
@@ -834,6 +855,9 @@ internal sealed class PetForm : Form
             case PetState.Stretch:
             case PetState.Scratch:
             case PetState.Yawn:
+            case PetState.SitSettle:
+            case PetState.TailFlick:
+            case PetState.RollFlop:
             case PetState.Landing:
                 energy -= 1;
                 break;
@@ -1011,6 +1035,10 @@ internal sealed class PetForm : Form
             case PetAction.Review: EnterReview(); break;
             case PetAction.Stretch:
             case PetAction.Scratch:
+            case PetAction.Yawn:
+            case PetAction.SitSettle:
+            case PetAction.TailFlick:
+            case PetAction.RollFlop:
                 ShowPendingAnimation(action.ToString());
                 break;
             default: throw new ArgumentOutOfRangeException(nameof(action));
