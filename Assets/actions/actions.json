@@ -154,6 +154,156 @@
           "sourceFolder": "Merry/roll-flop"
         }
       }
+    },
+    {
+      "id": "ear-twitch",
+      "displayName": "Ear Twitch",
+      "enabled": true,
+      "menuOrder": 70,
+      "frameCount": 4,
+      "frameMs": 130,
+      "minDurationMs": 650,
+      "maxDurationMs": 1100,
+      "autonomousWeight": 1,
+      "trayVisible": true,
+      "randomEligible": true,
+      "pets": {
+        "Marmalade": {
+          "enabled": true,
+          "atlasRow": 17,
+          "sourceFolder": "Marmalade/ear-twitch"
+        },
+        "Merry": {
+          "enabled": true,
+          "atlasRow": 17,
+          "sourceFolder": "Merry/ear-twitch"
+        }
+      }
+    },
+    {
+      "id": "sleepy-blink",
+      "displayName": "Sleepy Blink",
+      "enabled": true,
+      "menuOrder": 80,
+      "frameCount": 4,
+      "frameMs": 200,
+      "minDurationMs": 900,
+      "maxDurationMs": 1500,
+      "autonomousWeight": 1,
+      "trayVisible": true,
+      "randomEligible": true,
+      "pets": {
+        "Marmalade": {
+          "enabled": true,
+          "atlasRow": 18,
+          "sourceFolder": "Marmalade/sleepy-blink"
+        },
+        "Merry": {
+          "enabled": true,
+          "atlasRow": 18,
+          "sourceFolder": "Merry/sleepy-blink"
+        }
+      }
+    },
+    {
+      "id": "look-behind",
+      "displayName": "Look Behind",
+      "enabled": true,
+      "menuOrder": 90,
+      "frameCount": 6,
+      "frameMs": 190,
+      "minDurationMs": 1400,
+      "maxDurationMs": 2200,
+      "autonomousWeight": 0,
+      "trayVisible": true,
+      "randomEligible": true,
+      "pets": {
+        "Marmalade": {
+          "enabled": true,
+          "atlasRow": 19,
+          "sourceFolder": "Marmalade/look-behind"
+        },
+        "Merry": {
+          "enabled": true,
+          "atlasRow": 19,
+          "sourceFolder": "Merry/look-behind"
+        }
+      }
+    },
+    {
+      "id": "loaf",
+      "displayName": "Loaf",
+      "enabled": true,
+      "menuOrder": 100,
+      "frameCount": 6,
+      "frameMs": 260,
+      "minDurationMs": 2800,
+      "maxDurationMs": 4800,
+      "autonomousWeight": 0,
+      "trayVisible": true,
+      "randomEligible": true,
+      "pets": {
+        "Marmalade": {
+          "enabled": true,
+          "atlasRow": 20,
+          "sourceFolder": "Marmalade/loaf"
+        },
+        "Merry": {
+          "enabled": true,
+          "atlasRow": 20,
+          "sourceFolder": "Merry/loaf"
+        }
+      }
+    },
+    {
+      "id": "knead",
+      "displayName": "Knead",
+      "enabled": true,
+      "menuOrder": 110,
+      "frameCount": 8,
+      "frameMs": 160,
+      "minDurationMs": 2000,
+      "maxDurationMs": 3200,
+      "autonomousWeight": 0,
+      "trayVisible": true,
+      "randomEligible": true,
+      "pets": {
+        "Marmalade": {
+          "enabled": true,
+          "atlasRow": 21,
+          "sourceFolder": "Marmalade/knead"
+        },
+        "Merry": {
+          "enabled": true,
+          "atlasRow": 21,
+          "sourceFolder": "Merry/knead"
+        }
+      }
+    },
+    {
+      "id": "head-shake",
+      "displayName": "Head Shake",
+      "enabled": true,
+      "menuOrder": 120,
+      "frameCount": 6,
+      "frameMs": 110,
+      "minDurationMs": 800,
+      "maxDurationMs": 1400,
+      "autonomousWeight": 0,
+      "trayVisible": true,
+      "randomEligible": true,
+      "pets": {
+        "Marmalade": {
+          "enabled": true,
+          "atlasRow": 22,
+          "sourceFolder": "Marmalade/head-shake"
+        },
+        "Merry": {
+          "enabled": true,
+          "atlasRow": 22,
+          "sourceFolder": "Merry/head-shake"
+        }
+      }
     }
   ]
 }
