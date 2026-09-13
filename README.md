@@ -5,10 +5,14 @@ A lightweight Windows desktop pet featuring Marmalade and Merry.
 ## Current baseline
 
 - .NET 8 WinForms
-- Transparent always-on-top desktop pet window
+- Transparent layered desktop pet window with an optional always-on-top setting
 - System tray controls and pet switching
+- Native Settings window with persistent local preferences
+- Controlled pet sizes and Low / Normal / High wandering frequency
+- Optional per-user Windows startup entry
 - Autonomous idle / walking / curiosity behaviors
 - Click / pet reactions
+- Central action-selection foundation for adding future supported actions
 - Pickup dragging with airborne pose and landing reaction
 - Marmalade and Merry sprite atlases
 - Marmalade and Merry share identical behavior logic; only artwork and active pet identity differ
@@ -37,6 +41,12 @@ dotnet run
 dotnet build
 ```
 
+## Settings
+
+Open **Settings...** from the tray menu to choose the preferred pet, always-on-top behavior, pet size (75%, 100%, 125%, or 150%), wandering frequency, and whether ClippyCat starts with Windows.
+
+Preferences are stored locally in `%LOCALAPPDATA%\MarmaladeDesktopPet\settings.json`. The Windows startup option uses only the current user's startup registry entry and does not require administrator rights.
+
 ## Diagnostics
 
 ClippyCat writes runtime diagnostics to:
@@ -63,5 +73,5 @@ The v1.4 diagnostic layer records:
 
 This lets animation cleanup target actual outlier frames instead of treating normal pose changes as errors.
 
-Current app behavior baseline: **v1.4**.
+Current app behavior baseline: **v1.6**.
 Current diagnostic layer: **v1.4**.

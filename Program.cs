@@ -70,13 +70,16 @@ internal sealed class PetApplicationContext : ApplicationContext
         var doSomethingItem = new ToolStripMenuItem("Do Something");
         doSomethingItem.Click += (_, _) => petForm.TriggerRandomAction();
 
+        var settingsItem = new ToolStripMenuItem("Settings...");
+        settingsItem.Click += (_, _) => ShowSettings();
+
         var aboutItem = new ToolStripMenuItem("About");
         aboutItem.Click += (_, _) =>
         {
             MessageBox.Show(
-                "Marmalade Desktop Pet\nVersion 1.4\n\n" +
-                "Marmalade and Merry now share the same behavior rules;\n" +
-                "their only difference is artwork and active pet identity.",
+                "Marmalade Desktop Pet\nVersion 1.6\n\n" +
+                "Adds persistent preferences and a clean foundation\n" +
+                "for future pet actions.",
                 "About",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information
@@ -94,6 +97,7 @@ internal sealed class PetApplicationContext : ApplicationContext
         trayMenu.Items.Add(restItem);
         trayMenu.Items.Add(doSomethingItem);
         trayMenu.Items.Add(new ToolStripSeparator());
+        trayMenu.Items.Add(settingsItem);
         trayMenu.Items.Add(aboutItem);
         trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(quitItem);
@@ -137,6 +141,13 @@ internal sealed class PetApplicationContext : ApplicationContext
         hideShowItem.Text = petForm.Visible ? "Hide" : "Show";
     }
 
+    private void ShowSettings()
+    {
+        using var settingsForm = new SettingsForm(petForm, UpdatePetChecks);
+        settingsForm.ShowDialog();
+        UpdatePetChecks();
+    }
+
     private void QuitApplication()
     {
         trayIcon.Visible = false;
@@ -166,10 +177,31 @@ internal enum PetState
     Dragging
 }
 
+internal enum PetAction
+{
+    Idle,
+    WalkLeft,
+    WalkRight,
+    Wait,
+    Rest,
+    Wave,
+    Jump,
+    Groom,
+    Paw,
+    Review
+}
+
 internal sealed class PetSettings
 {
+    public static readonly int[] AllowedPetSizes = { 75, 100, 125, 150 };
+    public static readonly string[] AllowedWanderingFrequencies = { "Low", "Normal", "High" };
+
     public int? X { get; set; }
     public string ActivePet { get; set; } = "Marmalade";
+    public bool AlwaysOnTop { get; set; } = true;
+    public int PetSizePercent { get; set; } = 100;
+    public string WanderingFrequency { get; set; } = "Normal";
+    public bool StartWithWindows { get; set; }
 }
 
 internal sealed class PetForm : Form
@@ -200,6 +232,7 @@ internal sealed class PetForm : Form
     private readonly System.Windows.Forms.Timer mainTimer;
     private readonly Random random = new();
     private readonly string settingsPath;
+    private PetSettings settings = new();
 
     private PetState state = PetState.Idle;
     private int currentRow = IdleRow;
@@ -247,11 +280,15 @@ internal sealed class PetForm : Form
             "settings.json"
         );
 
-        PetSettings settings = LoadSettings();
+        settings = LoadSettings();
         ActivePetName = settings.ActivePet;
 
         if (!PetAssetExists(ActivePetName))
             ActivePetName = "Marmalade";
+
+        settings.ActivePet = ActivePetName;
+        TopMost = settings.AlwaysOnTop;
+        Size = GetPetSize(settings.PetSizePercent);
 
         LoadAtlas(ActivePetName);
         PositionAtStartup(settings);
@@ -299,6 +336,78 @@ internal sealed class PetForm : Form
         RenderCurrentFrame(true);
     }
 
+    public PetSettings GetSettingsSnapshot() => new()
+    {
+        X = Left,
+        ActivePet = ActivePetName,
+        AlwaysOnTop = settings.AlwaysOnTop,
+        PetSizePercent = settings.PetSizePercent,
+        WanderingFrequency = settings.WanderingFrequency,
+        StartWithWindows = settings.StartWithWindows
+    };
+
+    public void SetAlwaysOnTopSetting(bool enabled)
+    {
+        if (settings.AlwaysOnTop == enabled)
+            return;
+
+        settings.AlwaysOnTop = enabled;
+        TopMost = enabled;
+        SaveSettings();
+    }
+
+    public void SetPetSizePercent(int sizePercent)
+    {
+        if (!PetSettings.AllowedPetSizes.Contains(sizePercent) ||
+            settings.PetSizePercent == sizePercent)
+            return;
+
+        int centerX = Left + Width / 2;
+        int bottom = Top + Height;
+        settings.PetSizePercent = sizePercent;
+        Size = GetPetSize(sizePercent);
+
+        Rectangle working = Screen.FromPoint(new Point(centerX, bottom - 1)).WorkingArea;
+        int x = Math.Clamp(centerX - Width / 2, working.Left, working.Right - Width);
+        int y = Math.Clamp(bottom - Height, working.Top, working.Bottom - Height);
+        Location = new Point(x, y);
+
+        lastRenderedRow = -1;
+        lastRenderedFrame = -1;
+        RenderCurrentFrame(true);
+        SaveSettings();
+    }
+
+    public void SetWanderingFrequency(string frequency)
+    {
+        if (!PetSettings.AllowedWanderingFrequencies.Contains(frequency) ||
+            settings.WanderingFrequency.Equals(frequency, StringComparison.Ordinal))
+            return;
+
+        settings.WanderingFrequency = frequency;
+
+        if (state == PetState.Idle && !paused)
+            EnterIdle();
+
+        SaveSettings();
+    }
+
+    public bool TrySetStartWithWindows(bool enabled, out string? error)
+    {
+        if (settings.StartWithWindows == enabled)
+        {
+            error = null;
+            return true;
+        }
+
+        if (!WindowsStartupManager.TrySetEnabled(enabled, out error))
+            return false;
+
+        settings.StartWithWindows = enabled;
+        SaveSettings();
+        return true;
+    }
+
     public void SwitchPet(string petName)
     {
         if (petName.Equals(ActivePetName, StringComparison.OrdinalIgnoreCase))
@@ -320,6 +429,7 @@ internal sealed class PetForm : Form
 
         LoadAtlas(petName);
         ActivePetName = petName;
+        settings.ActivePet = ActivePetName;
         energy = 72;
         paused = false;
 
@@ -372,17 +482,16 @@ internal sealed class PetForm : Form
         if (!Visible)
             Show();
 
-        int roll = random.Next(5);
-
-        switch (roll)
+        PetAction action = random.Next(5) switch
         {
-            case 0: EnterWaving(); break;
-            case 1: EnterJumping(); break;
-            case 2: EnterGrooming(); break;
-            case 3: EnterPawing(); break;
-            default: EnterReview(); break;
-        }
+            0 => PetAction.Wave,
+            1 => PetAction.Jump,
+            2 => PetAction.Groom,
+            3 => PetAction.Paw,
+            _ => PetAction.Review
+        };
 
+        PerformPetAction(action);
         RenderCurrentFrame(true);
     }
 
@@ -404,15 +513,44 @@ internal sealed class PetForm : Form
         {
             if (File.Exists(settingsPath))
             {
-                return JsonSerializer.Deserialize<PetSettings>(
+                PetSettings? loaded = JsonSerializer.Deserialize<PetSettings>(
                     File.ReadAllText(settingsPath)
-                ) ?? new PetSettings();
+                );
+
+                return NormalizeSettings(loaded);
             }
         }
         catch { }
 
         return new PetSettings();
     }
+
+    private static PetSettings NormalizeSettings(PetSettings? loaded)
+    {
+        PetSettings normalized = loaded ?? new PetSettings();
+
+        if (!string.Equals(normalized.ActivePet, "Marmalade", StringComparison.OrdinalIgnoreCase) &&
+            !string.Equals(normalized.ActivePet, "Merry", StringComparison.OrdinalIgnoreCase))
+            normalized.ActivePet = "Marmalade";
+        else
+            normalized.ActivePet = normalized.ActivePet.Equals("Merry", StringComparison.OrdinalIgnoreCase)
+                ? "Merry"
+                : "Marmalade";
+
+        if (!PetSettings.AllowedPetSizes.Contains(normalized.PetSizePercent))
+            normalized.PetSizePercent = 100;
+
+        normalized.WanderingFrequency = PetSettings.AllowedWanderingFrequencies
+            .FirstOrDefault(value => value.Equals(normalized.WanderingFrequency, StringComparison.OrdinalIgnoreCase))
+            ?? "Normal";
+
+        return normalized;
+    }
+
+    private static Size GetPetSize(int sizePercent) => new(
+        CellWidth * sizePercent / 100,
+        CellHeight * sizePercent / 100
+    );
 
     private void PositionAtStartup(PetSettings settings)
     {
@@ -465,17 +603,18 @@ internal sealed class PetForm : Form
             if (!string.IsNullOrWhiteSpace(folder))
                 Directory.CreateDirectory(folder);
 
-            File.WriteAllText(
-                settingsPath,
-                JsonSerializer.Serialize(
-                    new PetSettings
-                    {
-                        X = Left,
-                        ActivePet = ActivePetName
-                    },
-                    new JsonSerializerOptions { WriteIndented = true }
-                )
+            settings.X = Left;
+            settings.ActivePet = ActivePetName;
+
+            string json = JsonSerializer.Serialize(
+                settings,
+                new JsonSerializerOptions { WriteIndented = true }
             );
+
+            if (File.Exists(settingsPath) && File.ReadAllText(settingsPath) == json)
+                return;
+
+            File.WriteAllText(settingsPath, json);
         }
         catch { }
     }
@@ -632,44 +771,63 @@ internal sealed class PetForm : Form
 
     private void ChooseNextState()
     {
+        PerformPetAction(SelectNextAutonomousAction());
+    }
+
+    private PetAction SelectNextAutonomousAction()
+    {
         if (energy <= 25)
         {
             int tiredRoll = random.Next(100);
 
-            if (tiredRoll < 52) EnterResting();
-            else if (tiredRoll < 72) EnterIdle();
-            else if (tiredRoll < 88) EnterGrooming();
-            else EnterWaiting();
-
-            return;
+            if (tiredRoll < 52) return PetAction.Rest;
+            if (tiredRoll < 72) return PetAction.Idle;
+            if (tiredRoll < 88) return PetAction.Groom;
+            return PetAction.Wait;
         }
 
         if (energy >= 75)
         {
             int activeRoll = random.Next(100);
 
-            if (activeRoll < 22) EnterWalkLeft();
-            else if (activeRoll < 44) EnterWalkRight();
-            else if (activeRoll < 56) EnterPawing();
-            else if (activeRoll < 68) EnterJumping();
-            else if (activeRoll < 78) EnterWaving();
-            else if (activeRoll < 88) EnterReview();
-            else EnterIdle();
-
-            return;
+            if (activeRoll < 22) return PetAction.WalkLeft;
+            if (activeRoll < 44) return PetAction.WalkRight;
+            if (activeRoll < 56) return PetAction.Paw;
+            if (activeRoll < 68) return PetAction.Jump;
+            if (activeRoll < 78) return PetAction.Wave;
+            if (activeRoll < 88) return PetAction.Review;
+            return PetAction.Idle;
         }
 
         int roll = random.Next(100);
 
-        if (roll < 34) EnterIdle();
-        else if (roll < 46) EnterWalkLeft();
-        else if (roll < 58) EnterWalkRight();
-        else if (roll < 69) EnterWaiting();
-        else if (roll < 79) EnterReview();
-        else if (roll < 88) EnterGrooming();
-        else if (roll < 93) EnterPawing();
-        else if (roll < 97) EnterWaving();
-        else EnterJumping();
+        if (roll < 34) return PetAction.Idle;
+        if (roll < 46) return PetAction.WalkLeft;
+        if (roll < 58) return PetAction.WalkRight;
+        if (roll < 69) return PetAction.Wait;
+        if (roll < 79) return PetAction.Review;
+        if (roll < 88) return PetAction.Groom;
+        if (roll < 93) return PetAction.Paw;
+        if (roll < 97) return PetAction.Wave;
+        return PetAction.Jump;
+    }
+
+    private void PerformPetAction(PetAction action)
+    {
+        switch (action)
+        {
+            case PetAction.Idle: EnterIdle(); break;
+            case PetAction.WalkLeft: EnterWalkLeft(); break;
+            case PetAction.WalkRight: EnterWalkRight(); break;
+            case PetAction.Wait: EnterWaiting(); break;
+            case PetAction.Rest: EnterResting(); break;
+            case PetAction.Wave: EnterWaving(); break;
+            case PetAction.Jump: EnterJumping(); break;
+            case PetAction.Groom: EnterGrooming(); break;
+            case PetAction.Paw: EnterPawing(); break;
+            case PetAction.Review: EnterReview(); break;
+            default: throw new ArgumentOutOfRangeException(nameof(action));
+        }
     }
 
     private void SetState(PetState newState, int row, int frames, int minMs, int maxMs)
@@ -687,8 +845,17 @@ internal sealed class PetForm : Form
         lastRenderedFrame = -1;
     }
 
-    private void EnterIdle() =>
-        SetState(PetState.Idle, IdleRow, IdleFrames, 2500, 7000);
+    private void EnterIdle()
+    {
+        (int minMs, int maxMs) = settings.WanderingFrequency switch
+        {
+            "Low" => (5000, 12000),
+            "High" => (1500, 4500),
+            _ => (2500, 7000)
+        };
+
+        SetState(PetState.Idle, IdleRow, IdleFrames, minMs, maxMs);
+    }
 
     private void EnterWalkLeft()
     {
@@ -1124,6 +1291,29 @@ internal sealed class PetForm : Form
 
     private void SetBitmap(Bitmap bitmap)
     {
+        Bitmap? scaledBitmap = null;
+        Bitmap displayBitmap = bitmap;
+
+        if (bitmap.Width != Width || bitmap.Height != Height)
+        {
+            scaledBitmap = new Bitmap(Width, Height, PixelFormat.Format32bppArgb);
+
+            using Graphics scaleGraphics = Graphics.FromImage(scaledBitmap);
+            scaleGraphics.Clear(Color.Transparent);
+            scaleGraphics.CompositingMode = System.Drawing.Drawing2D.CompositingMode.SourceCopy;
+            scaleGraphics.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+            scaleGraphics.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            scaleGraphics.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+            scaleGraphics.DrawImage(
+                bitmap,
+                new Rectangle(0, 0, Width, Height),
+                new Rectangle(0, 0, bitmap.Width, bitmap.Height),
+                GraphicsUnit.Pixel
+            );
+
+            displayBitmap = scaledBitmap;
+        }
+
         IntPtr screenDc = NativeMethods.GetDC(IntPtr.Zero);
         IntPtr memoryDc = NativeMethods.CreateCompatibleDC(screenDc);
 
@@ -1132,10 +1322,10 @@ internal sealed class PetForm : Form
 
         try
         {
-            hBitmap = bitmap.GetHbitmap(Color.FromArgb(0));
+            hBitmap = displayBitmap.GetHbitmap(Color.FromArgb(0));
             oldBitmap = NativeMethods.SelectObject(memoryDc, hBitmap);
 
-            NativeMethods.SIZE size = new() { cx = bitmap.Width, cy = bitmap.Height };
+            NativeMethods.SIZE size = new() { cx = displayBitmap.Width, cy = displayBitmap.Height };
             NativeMethods.POINT sourcePoint = new() { x = 0, y = 0 };
             NativeMethods.POINT topPosition = new() { x = Left, y = Top };
 
@@ -1169,6 +1359,7 @@ internal sealed class PetForm : Form
 
             NativeMethods.DeleteDC(memoryDc);
             NativeMethods.ReleaseDC(IntPtr.Zero, screenDc);
+            scaledBitmap?.Dispose();
         }
     }
 }
