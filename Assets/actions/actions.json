@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "cellWidth": 192,
+  "cellHeight": 208,
+  "atlasColumns": 8,
+  "baseRowCount": 11,
+  "actions": [
+    {
+      "name": "Stretch",
+      "frameCount": 6,
+      "frameMs": 220,
+      "minDurationMs": 1800,
+      "maxDurationMs": 2600,
+      "autonomousWeight": 3,
+      "trayVisible": true,
+      "randomEligible": true,
+      "pets": {
+        "Marmalade": {
+          "enabled": true,
+          "atlasRow": 11,
+          "sourceFolder": "Marmalade/stretch"
+        },
+        "Merry": {
+          "enabled": false,
+          "atlasRow": 11,
+          "sourceFolder": "Merry/stretch"
+        }
+      }
+    },
+    {
+      "name": "Scratch",
+      "frameCount": 0,
+      "frameMs": 0,
+      "minDurationMs": 0,
+      "maxDurationMs": 0,
+      "autonomousWeight": 0,
+      "trayVisible": true,
+      "randomEligible": false,
+      "pets": {
+        "Marmalade": {
+          "enabled": false,
+          "atlasRow": null,
+          "sourceFolder": "Marmalade/scratch"
+        },
+        "Merry": {
+          "enabled": false,
+          "atlasRow": null,
+          "sourceFolder": "Merry/scratch"
+        }
+      }
+    }
+  ]
+}

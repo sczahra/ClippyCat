@@ -69,9 +69,11 @@ internal sealed class PetApplicationContext : ApplicationContext
 
         var stretchItem = new ToolStripMenuItem("Stretch");
         stretchItem.Click += (_, _) => petForm.TriggerAction(PetAction.Stretch);
+        stretchItem.Visible = petForm.IsActionTrayVisible(PetAction.Stretch);
 
         var scratchItem = new ToolStripMenuItem("Scratch");
         scratchItem.Click += (_, _) => petForm.TriggerAction(PetAction.Scratch);
+        scratchItem.Visible = petForm.IsActionTrayVisible(PetAction.Scratch);
 
         var doSomethingItem = new ToolStripMenuItem("Do Something");
         doSomethingItem.Click += (_, _) => petForm.TriggerRandomAction();
@@ -83,9 +85,9 @@ internal sealed class PetApplicationContext : ApplicationContext
         aboutItem.Click += (_, _) =>
         {
             MessageBox.Show(
-                "Marmalade Desktop Pet\nVersion 1.8\n\n" +
-                "Adds Marmalade's dedicated Stretch animation through\n" +
-                "the shared pet action dispatcher.",
+                "Marmalade Desktop Pet\nVersion 1.9\n\n" +
+                "Adds a reusable manifest-driven pipeline for\n" +
+                "dedicated action animations.",
                 "About",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information
@@ -202,6 +204,36 @@ internal enum PetAction
     Review
 }
 
+internal sealed class ActionManifest
+{
+    public int SchemaVersion { get; set; }
+    public int CellWidth { get; set; }
+    public int CellHeight { get; set; }
+    public int AtlasColumns { get; set; }
+    public int BaseRowCount { get; set; }
+    public List<ActionDefinition> Actions { get; set; } = new();
+}
+
+internal sealed class ActionDefinition
+{
+    public string Name { get; set; } = string.Empty;
+    public int FrameCount { get; set; }
+    public int FrameMs { get; set; }
+    public int MinDurationMs { get; set; }
+    public int MaxDurationMs { get; set; }
+    public int AutonomousWeight { get; set; }
+    public bool TrayVisible { get; set; } = true;
+    public bool RandomEligible { get; set; }
+    public Dictionary<string, ActionPetDefinition> Pets { get; set; } = new();
+}
+
+internal sealed class ActionPetDefinition
+{
+    public bool Enabled { get; set; }
+    public int? AtlasRow { get; set; }
+    public string SourceFolder { get; set; } = string.Empty;
+}
+
 internal sealed class PetSettings
 {
     public static readonly int[] AllowedPetSizes = { 75, 100, 125, 150 };
@@ -229,7 +261,6 @@ internal sealed class PetForm : Form
     private const int WaitingRow = 6;
     private const int PawingRow = 7;
     private const int ReviewRow = 8;
-    private const int StretchRow = 11;
 
     private const int IdleFrames = 6;
     private const int RunFrames = 8;
@@ -239,12 +270,12 @@ internal sealed class PetForm : Form
     private const int WaitingFrames = 6;
     private const int PawingFrames = 6;
     private const int ReviewFrames = 6;
-    private const int StretchFrames = 6;
 
     private Bitmap atlas = null!;
     private readonly System.Windows.Forms.Timer mainTimer;
     private readonly Random random = new();
     private readonly string settingsPath;
+    private readonly Dictionary<PetAction, ActionDefinition> actionDefinitions;
     private PetSettings settings = new();
 
     private PetState state = PetState.Idle;
@@ -278,9 +309,6 @@ internal sealed class PetForm : Form
     public bool IsPaused => paused;
     public string ActivePetName { get; private set; } = "Marmalade";
 
-    private bool HasStretchArtwork =>
-        ActivePetName.Equals("Marmalade", StringComparison.OrdinalIgnoreCase);
-
     public PetForm()
     {
         FormBorderStyle = FormBorderStyle.None;
@@ -289,6 +317,8 @@ internal sealed class PetForm : Form
         StartPosition = FormStartPosition.Manual;
         Width = CellWidth;
         Height = CellHeight;
+
+        actionDefinitions = LoadActionDefinitions();
 
         settingsPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -502,16 +532,25 @@ internal sealed class PetForm : Form
         RenderCurrentFrame(true);
     }
 
+    public bool IsActionTrayVisible(PetAction action) =>
+        !actionDefinitions.TryGetValue(action, out ActionDefinition? definition) || definition.TrayVisible;
+
     public void TriggerRandomAction()
     {
-        PetAction action = random.Next(HasStretchArtwork ? 6 : 5) switch
+        PetAction[] definedActions = actionDefinitions
+            .Where(pair => pair.Value.RandomEligible && IsActionAvailable(pair.Key))
+            .Select(pair => pair.Key)
+            .ToArray();
+
+        int selection = random.Next(5 + definedActions.Length);
+        PetAction action = selection switch
         {
             0 => PetAction.Wave,
             1 => PetAction.Jump,
             2 => PetAction.Groom,
             3 => PetAction.Paw,
             4 => PetAction.Review,
-            _ => PetAction.Stretch
+            _ => definedActions[selection - 5]
         };
 
         TriggerAction(action);
@@ -585,6 +624,71 @@ internal sealed class PetForm : Form
             x = Math.Clamp(savedX, working.Left, working.Right - Width);
 
         Location = new Point(x, working.Bottom - Height);
+    }
+
+    private static Dictionary<PetAction, ActionDefinition> LoadActionDefinitions()
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "Assets", "actions", "actions.json");
+
+        try
+        {
+            if (!File.Exists(path))
+                throw new FileNotFoundException("Action manifest was not found.", path);
+
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            ActionManifest? manifest = JsonSerializer.Deserialize<ActionManifest>(
+                File.ReadAllText(path),
+                options
+            );
+
+            if (manifest is null || manifest.SchemaVersion != 1)
+                throw new InvalidDataException("Unsupported or empty action manifest.");
+
+            if (manifest.CellWidth != CellWidth ||
+                manifest.CellHeight != CellHeight ||
+                manifest.AtlasColumns != 8)
+            {
+                throw new InvalidDataException("Action manifest atlas dimensions do not match the app.");
+            }
+
+            var definitions = new Dictionary<PetAction, ActionDefinition>();
+
+            foreach (ActionDefinition definition in manifest.Actions)
+            {
+                if (!Enum.TryParse(definition.Name, true, out PetAction action))
+                    throw new InvalidDataException($"Unknown manifest action '{definition.Name}'.");
+
+                definition.Pets = new Dictionary<string, ActionPetDefinition>(
+                    definition.Pets,
+                    StringComparer.OrdinalIgnoreCase
+                );
+
+                if (!definitions.TryAdd(action, definition))
+                    throw new InvalidDataException($"Duplicate manifest action '{definition.Name}'.");
+
+                if (definition.Pets.Values.Any(pet => pet.Enabled) &&
+                    (definition.FrameCount <= 0 ||
+                     definition.FrameMs <= 0 ||
+                     definition.MinDurationMs <= 0 ||
+                     definition.MaxDurationMs <= definition.MinDurationMs))
+                {
+                    throw new InvalidDataException($"Enabled action '{definition.Name}' has invalid timing metadata.");
+                }
+            }
+
+            return definitions;
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                $"Dedicated action metadata could not be loaded. Those actions will remain pending.\n\n{ex.Message}",
+                "ClippyCat Action Manifest",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning
+            );
+
+            return new Dictionary<PetAction, ActionDefinition>();
+        }
     }
 
     private bool PetAssetExists(string petName)
@@ -819,17 +923,13 @@ internal sealed class PetForm : Form
             if (activeRoll < 68) return PetAction.Jump;
             if (activeRoll < 78) return PetAction.Wave;
             if (activeRoll < 88) return PetAction.Review;
-            if (HasStretchArtwork && activeRoll < 91) return PetAction.Stretch;
-            return PetAction.Idle;
+            return SelectIdleOrDefinedAction(activeRoll - 88, 12);
         }
 
         int roll = random.Next(100);
 
         if (roll < 34)
-        {
-            if (HasStretchArtwork && roll >= 31) return PetAction.Stretch;
-            return PetAction.Idle;
-        }
+            return SelectIdleOrDefinedAction(roll, 34);
         if (roll < 46) return PetAction.WalkLeft;
         if (roll < 58) return PetAction.WalkRight;
         if (roll < 69) return PetAction.Wait;
@@ -840,8 +940,53 @@ internal sealed class PetForm : Form
         return PetAction.Jump;
     }
 
+    private PetAction SelectIdleOrDefinedAction(int idleRoll, int idleBucketSize)
+    {
+        KeyValuePair<PetAction, ActionDefinition>[] eligibleActions = actionDefinitions
+            .Where(pair => pair.Value.AutonomousWeight > 0 && IsActionAvailable(pair.Key))
+            .ToArray();
+        int totalActionWeight = eligibleActions.Sum(pair => pair.Value.AutonomousWeight);
+
+        if (idleRoll < idleBucketSize - totalActionWeight)
+            return PetAction.Idle;
+
+        int actionRoll = idleRoll - (idleBucketSize - totalActionWeight);
+        foreach (KeyValuePair<PetAction, ActionDefinition> pair in eligibleActions)
+        {
+            if (actionRoll < pair.Value.AutonomousWeight)
+                return pair.Key;
+
+            actionRoll -= pair.Value.AutonomousWeight;
+        }
+
+        return PetAction.Idle;
+    }
+
     private void PerformPetAction(PetAction action)
     {
+        if (actionDefinitions.TryGetValue(action, out ActionDefinition? definition))
+        {
+            if (TryGetEnabledAction(action, out definition, out ActionPetDefinition? pet))
+            {
+                if (!Enum.TryParse(definition.Name, true, out PetState definedState))
+                    throw new InvalidOperationException($"Action '{definition.Name}' has no matching PetState.");
+
+                SetState(
+                    definedState,
+                    pet.AtlasRow!.Value,
+                    definition.FrameCount,
+                    definition.MinDurationMs,
+                    definition.MaxDurationMs
+                );
+            }
+            else
+            {
+                ShowPendingAnimation(definition.Name);
+            }
+
+            return;
+        }
+
         switch (action)
         {
             case PetAction.Idle: EnterIdle(); break;
@@ -852,15 +997,39 @@ internal sealed class PetForm : Form
             case PetAction.Wave: EnterWaving(); break;
             case PetAction.Jump: EnterJumping(); break;
             case PetAction.Groom: EnterGrooming(); break;
-            case PetAction.Stretch:
-                if (HasStretchArtwork) EnterStretch();
-                else ShowPendingAnimation("Stretch");
-                break;
-            case PetAction.Scratch: ShowPendingAnimation("Scratch"); break;
             case PetAction.Paw: EnterPawing(); break;
             case PetAction.Review: EnterReview(); break;
+            case PetAction.Stretch:
+            case PetAction.Scratch:
+                ShowPendingAnimation(action.ToString());
+                break;
             default: throw new ArgumentOutOfRangeException(nameof(action));
         }
+    }
+
+    private bool IsActionAvailable(PetAction action) =>
+        TryGetEnabledAction(action, out _, out _);
+
+    private bool TryGetEnabledAction(
+        PetAction action,
+        out ActionDefinition definition,
+        out ActionPetDefinition pet
+    )
+    {
+        definition = null!;
+        pet = null!;
+
+        if (!actionDefinitions.TryGetValue(action, out ActionDefinition? foundDefinition) ||
+            !foundDefinition.Pets.TryGetValue(ActivePetName, out ActionPetDefinition? foundPet) ||
+            !foundPet.Enabled ||
+            !foundPet.AtlasRow.HasValue)
+        {
+            return false;
+        }
+
+        definition = foundDefinition;
+        pet = foundPet;
+        return true;
     }
 
     private void ShowPendingAnimation(string action)
@@ -952,9 +1121,6 @@ internal sealed class PetForm : Form
     private void EnterGrooming() =>
         SetState(PetState.Grooming, GroomingRow, GroomingFrames, 2400, 4200);
 
-    private void EnterStretch() =>
-        SetState(PetState.Stretch, StretchRow, StretchFrames, 1800, 2600);
-
     private void EnterPawing() =>
         SetState(PetState.Pawing, PawingRow, PawingFrames, 1500, 2600);
 
@@ -1027,22 +1193,30 @@ internal sealed class PetForm : Form
         return Left != oldX;
     }
 
-    private int GetFrameDelay() => state switch
+    private int GetFrameDelay()
     {
-        PetState.WalkLeft => 105,
-        PetState.WalkRight => 105,
-        PetState.Waving => 180,
-        PetState.Jumping => 160,
-        PetState.Grooming => 230,
-        PetState.Stretch => 220,
-        PetState.Pawing => 210,
-        PetState.Purring => 280,
-        PetState.Landing => 90,
-        PetState.Resting => 300,
-        PetState.Waiting => 220,
-        PetState.Review => 220,
-        _ => 180
-    };
+        if (Enum.TryParse(state.ToString(), true, out PetAction action) &&
+            TryGetEnabledAction(action, out ActionDefinition definition, out _))
+        {
+            return definition.FrameMs;
+        }
+
+        return state switch
+        {
+            PetState.WalkLeft => 105,
+            PetState.WalkRight => 105,
+            PetState.Waving => 180,
+            PetState.Jumping => 160,
+            PetState.Grooming => 230,
+            PetState.Pawing => 210,
+            PetState.Purring => 280,
+            PetState.Landing => 90,
+            PetState.Resting => 300,
+            PetState.Waiting => 220,
+            PetState.Review => 220,
+            _ => 180
+        };
+    }
 
     private void AdvanceAnimation()
     {
