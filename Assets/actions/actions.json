@@ -43,9 +43,31 @@
           "sourceFolder": "Marmalade/scratch"
         },
         "Merry": {
-          "enabled": false,
+          "enabled": true,
           "atlasRow": 12,
           "sourceFolder": "Merry/scratch"
+        }
+      }
+    },
+    {
+      "name": "Yawn",
+      "frameCount": 8,
+      "frameMs": 220,
+      "minDurationMs": 2200,
+      "maxDurationMs": 3400,
+      "autonomousWeight": 1,
+      "trayVisible": true,
+      "randomEligible": true,
+      "pets": {
+        "Marmalade": {
+          "enabled": true,
+          "atlasRow": 13,
+          "sourceFolder": "Marmalade/yawn"
+        },
+        "Merry": {
+          "enabled": true,
+          "atlasRow": 13,
+          "sourceFolder": "Merry/yawn"
         }
       }
     }

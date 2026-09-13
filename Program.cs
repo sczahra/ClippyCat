@@ -75,6 +75,10 @@ internal sealed class PetApplicationContext : ApplicationContext
         scratchItem.Click += (_, _) => petForm.TriggerAction(PetAction.Scratch);
         scratchItem.Visible = petForm.IsActionTrayVisible(PetAction.Scratch);
 
+        var yawnItem = new ToolStripMenuItem("Yawn");
+        yawnItem.Click += (_, _) => petForm.TriggerAction(PetAction.Yawn);
+        yawnItem.Visible = petForm.IsActionTrayVisible(PetAction.Yawn);
+
         var doSomethingItem = new ToolStripMenuItem("Do Something");
         doSomethingItem.Click += (_, _) => petForm.TriggerRandomAction();
 
@@ -85,9 +89,9 @@ internal sealed class PetApplicationContext : ApplicationContext
         aboutItem.Click += (_, _) =>
         {
             MessageBox.Show(
-                "Marmalade Desktop Pet\nVersion 2.0\n\n" +
-                "Integrates Marmalade Scratch through the\n" +
-                "dedicated action pipeline.",
+                "Marmalade Desktop Pet\nVersion 2.1\n\n" +
+                "Adds Merry Scratch and dedicated Yawn\n" +
+                "animations through the action pipeline.",
                 "About",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information
@@ -105,6 +109,7 @@ internal sealed class PetApplicationContext : ApplicationContext
         trayMenu.Items.Add(restItem);
         trayMenu.Items.Add(stretchItem);
         trayMenu.Items.Add(scratchItem);
+        trayMenu.Items.Add(yawnItem);
         trayMenu.Items.Add(doSomethingItem);
         trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(settingsItem);
@@ -181,6 +186,7 @@ internal enum PetState
     Grooming,
     Stretch,
     Scratch,
+    Yawn,
     Pawing,
     Review,
     Purring,
@@ -201,6 +207,7 @@ internal enum PetAction
     Groom,
     Stretch,
     Scratch,
+    Yawn,
     Paw,
     Review
 }
@@ -826,6 +833,7 @@ internal sealed class PetForm : Form
             case PetState.Review:
             case PetState.Stretch:
             case PetState.Scratch:
+            case PetState.Yawn:
             case PetState.Landing:
                 energy -= 1;
                 break;
