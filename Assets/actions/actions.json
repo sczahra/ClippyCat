@@ -29,22 +29,22 @@
     },
     {
       "name": "Scratch",
-      "frameCount": 0,
-      "frameMs": 0,
-      "minDurationMs": 0,
-      "maxDurationMs": 0,
-      "autonomousWeight": 0,
+      "frameCount": 8,
+      "frameMs": 150,
+      "minDurationMs": 1600,
+      "maxDurationMs": 2400,
+      "autonomousWeight": 2,
       "trayVisible": true,
-      "randomEligible": false,
+      "randomEligible": true,
       "pets": {
         "Marmalade": {
-          "enabled": false,
-          "atlasRow": null,
+          "enabled": true,
+          "atlasRow": 12,
           "sourceFolder": "Marmalade/scratch"
         },
         "Merry": {
           "enabled": false,
-          "atlasRow": null,
+          "atlasRow": 12,
           "sourceFolder": "Merry/scratch"
         }
       }

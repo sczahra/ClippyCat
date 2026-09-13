@@ -85,9 +85,9 @@ internal sealed class PetApplicationContext : ApplicationContext
         aboutItem.Click += (_, _) =>
         {
             MessageBox.Show(
-                "Marmalade Desktop Pet\nVersion 1.9\n\n" +
-                "Adds a reusable manifest-driven pipeline for\n" +
-                "dedicated action animations.",
+                "Marmalade Desktop Pet\nVersion 2.0\n\n" +
+                "Integrates Marmalade Scratch through the\n" +
+                "dedicated action pipeline.",
                 "About",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information
@@ -180,6 +180,7 @@ internal enum PetState
     Jumping,
     Grooming,
     Stretch,
+    Scratch,
     Pawing,
     Review,
     Purring,
@@ -824,6 +825,7 @@ internal sealed class PetForm : Form
             case PetState.Waving:
             case PetState.Review:
             case PetState.Stretch:
+            case PetState.Scratch:
             case PetState.Landing:
                 energy -= 1;
                 break;
