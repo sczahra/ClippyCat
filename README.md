@@ -12,7 +12,7 @@ A lightweight Windows desktop pet featuring Marmalade and Merry.
 - Optional per-user Windows startup entry
 - Autonomous idle / walking / curiosity behaviors
 - Click / pet reactions
-- Central action-selection foundation for adding future supported actions
+- Stretch and Scratch commands using the shared action dispatcher; dedicated animation artwork is planned and currently pending
 - Pickup dragging with airborne pose and landing reaction
 - Marmalade and Merry sprite atlases
 - Marmalade and Merry share identical behavior logic; only artwork and active pet identity differ
@@ -73,5 +73,5 @@ The v1.4 diagnostic layer records:
 
 This lets animation cleanup target actual outlier frames instead of treating normal pose changes as errors.
 
-Current app behavior baseline: **v1.6**.
+Current app behavior baseline: **v1.7**.
 Current diagnostic layer: **v1.4**.

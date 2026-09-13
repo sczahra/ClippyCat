@@ -67,6 +67,12 @@ internal sealed class PetApplicationContext : ApplicationContext
         var restItem = new ToolStripMenuItem("Rest");
         restItem.Click += (_, _) => petForm.ForceRest();
 
+        var stretchItem = new ToolStripMenuItem("Stretch");
+        stretchItem.Click += (_, _) => petForm.TriggerAction(PetAction.Stretch);
+
+        var scratchItem = new ToolStripMenuItem("Scratch");
+        scratchItem.Click += (_, _) => petForm.TriggerAction(PetAction.Scratch);
+
         var doSomethingItem = new ToolStripMenuItem("Do Something");
         doSomethingItem.Click += (_, _) => petForm.TriggerRandomAction();
 
@@ -77,9 +83,9 @@ internal sealed class PetApplicationContext : ApplicationContext
         aboutItem.Click += (_, _) =>
         {
             MessageBox.Show(
-                "Marmalade Desktop Pet\nVersion 1.6\n\n" +
-                "Adds persistent preferences and a clean foundation\n" +
-                "for future pet actions.",
+                "Marmalade Desktop Pet\nVersion 1.7\n\n" +
+                "Adds Stretch and Scratch commands prepared for\n" +
+                "dedicated animation artwork.",
                 "About",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information
@@ -95,6 +101,8 @@ internal sealed class PetApplicationContext : ApplicationContext
         trayMenu.Items.Add(pauseItem);
         trayMenu.Items.Add(callItem);
         trayMenu.Items.Add(restItem);
+        trayMenu.Items.Add(stretchItem);
+        trayMenu.Items.Add(scratchItem);
         trayMenu.Items.Add(doSomethingItem);
         trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(settingsItem);
@@ -187,6 +195,8 @@ internal enum PetAction
     Wave,
     Jump,
     Groom,
+    Stretch,
+    Scratch,
     Paw,
     Review
 }
@@ -477,11 +487,17 @@ internal sealed class PetForm : Form
         RenderCurrentFrame(true);
     }
 
-    public void TriggerRandomAction()
+    public void TriggerAction(PetAction action)
     {
         if (!Visible)
             Show();
 
+        PerformPetAction(action);
+        RenderCurrentFrame(true);
+    }
+
+    public void TriggerRandomAction()
+    {
         PetAction action = random.Next(5) switch
         {
             0 => PetAction.Wave,
@@ -491,8 +507,7 @@ internal sealed class PetForm : Form
             _ => PetAction.Review
         };
 
-        PerformPetAction(action);
-        RenderCurrentFrame(true);
+        TriggerAction(action);
     }
 
     protected override CreateParams CreateParams
@@ -824,10 +839,23 @@ internal sealed class PetForm : Form
             case PetAction.Wave: EnterWaving(); break;
             case PetAction.Jump: EnterJumping(); break;
             case PetAction.Groom: EnterGrooming(); break;
+            case PetAction.Stretch: ShowPendingAnimation("Stretch"); break;
+            case PetAction.Scratch: ShowPendingAnimation("Scratch"); break;
             case PetAction.Paw: EnterPawing(); break;
             case PetAction.Review: EnterReview(); break;
             default: throw new ArgumentOutOfRangeException(nameof(action));
         }
+    }
+
+    private void ShowPendingAnimation(string action)
+    {
+        MessageBox.Show(
+            this,
+            $"{action} animation coming soon.",
+            "ClippyCat",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information
+        );
     }
 
     private void SetState(PetState newState, int row, int frames, int minMs, int maxMs)
