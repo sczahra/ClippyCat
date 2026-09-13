@@ -83,9 +83,9 @@ internal sealed class PetApplicationContext : ApplicationContext
         aboutItem.Click += (_, _) =>
         {
             MessageBox.Show(
-                "Marmalade Desktop Pet\nVersion 1.7\n\n" +
-                "Adds Stretch and Scratch commands prepared for\n" +
-                "dedicated animation artwork.",
+                "Marmalade Desktop Pet\nVersion 1.8\n\n" +
+                "Adds Marmalade's dedicated Stretch animation through\n" +
+                "the shared pet action dispatcher.",
                 "About",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information
@@ -177,6 +177,7 @@ internal enum PetState
     Waving,
     Jumping,
     Grooming,
+    Stretch,
     Pawing,
     Review,
     Purring,
@@ -228,6 +229,7 @@ internal sealed class PetForm : Form
     private const int WaitingRow = 6;
     private const int PawingRow = 7;
     private const int ReviewRow = 8;
+    private const int StretchRow = 11;
 
     private const int IdleFrames = 6;
     private const int RunFrames = 8;
@@ -237,6 +239,7 @@ internal sealed class PetForm : Form
     private const int WaitingFrames = 6;
     private const int PawingFrames = 6;
     private const int ReviewFrames = 6;
+    private const int StretchFrames = 6;
 
     private Bitmap atlas = null!;
     private readonly System.Windows.Forms.Timer mainTimer;
@@ -274,6 +277,9 @@ internal sealed class PetForm : Form
 
     public bool IsPaused => paused;
     public string ActivePetName { get; private set; } = "Marmalade";
+
+    private bool HasStretchArtwork =>
+        ActivePetName.Equals("Marmalade", StringComparison.OrdinalIgnoreCase);
 
     public PetForm()
     {
@@ -498,13 +504,14 @@ internal sealed class PetForm : Form
 
     public void TriggerRandomAction()
     {
-        PetAction action = random.Next(5) switch
+        PetAction action = random.Next(HasStretchArtwork ? 6 : 5) switch
         {
             0 => PetAction.Wave,
             1 => PetAction.Jump,
             2 => PetAction.Groom,
             3 => PetAction.Paw,
-            _ => PetAction.Review
+            4 => PetAction.Review,
+            _ => PetAction.Stretch
         };
 
         TriggerAction(action);
@@ -712,6 +719,7 @@ internal sealed class PetForm : Form
 
             case PetState.Waving:
             case PetState.Review:
+            case PetState.Stretch:
             case PetState.Landing:
                 energy -= 1;
                 break;
@@ -811,12 +819,17 @@ internal sealed class PetForm : Form
             if (activeRoll < 68) return PetAction.Jump;
             if (activeRoll < 78) return PetAction.Wave;
             if (activeRoll < 88) return PetAction.Review;
+            if (HasStretchArtwork && activeRoll < 91) return PetAction.Stretch;
             return PetAction.Idle;
         }
 
         int roll = random.Next(100);
 
-        if (roll < 34) return PetAction.Idle;
+        if (roll < 34)
+        {
+            if (HasStretchArtwork && roll >= 31) return PetAction.Stretch;
+            return PetAction.Idle;
+        }
         if (roll < 46) return PetAction.WalkLeft;
         if (roll < 58) return PetAction.WalkRight;
         if (roll < 69) return PetAction.Wait;
@@ -839,7 +852,10 @@ internal sealed class PetForm : Form
             case PetAction.Wave: EnterWaving(); break;
             case PetAction.Jump: EnterJumping(); break;
             case PetAction.Groom: EnterGrooming(); break;
-            case PetAction.Stretch: ShowPendingAnimation("Stretch"); break;
+            case PetAction.Stretch:
+                if (HasStretchArtwork) EnterStretch();
+                else ShowPendingAnimation("Stretch");
+                break;
             case PetAction.Scratch: ShowPendingAnimation("Scratch"); break;
             case PetAction.Paw: EnterPawing(); break;
             case PetAction.Review: EnterReview(); break;
@@ -936,6 +952,9 @@ internal sealed class PetForm : Form
     private void EnterGrooming() =>
         SetState(PetState.Grooming, GroomingRow, GroomingFrames, 2400, 4200);
 
+    private void EnterStretch() =>
+        SetState(PetState.Stretch, StretchRow, StretchFrames, 1800, 2600);
+
     private void EnterPawing() =>
         SetState(PetState.Pawing, PawingRow, PawingFrames, 1500, 2600);
 
@@ -1015,6 +1034,7 @@ internal sealed class PetForm : Form
         PetState.Waving => 180,
         PetState.Jumping => 160,
         PetState.Grooming => 230,
+        PetState.Stretch => 220,
         PetState.Pawing => 210,
         PetState.Purring => 280,
         PetState.Landing => 90,
