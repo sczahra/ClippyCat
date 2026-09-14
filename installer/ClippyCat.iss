@@ -1,6 +1,6 @@
 #define MyAppName "ClippyCat"
 #ifndef MyAppVersion
-  #define MyAppVersion "2.6.0"
+  #define MyAppVersion "2.6.1"
 #endif
 #define MyAppPublisher "ClippyCat Project"
 #define MyAppExeName "MarmaladeDesktopPet.exe"
