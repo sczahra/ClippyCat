@@ -7,11 +7,32 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
+    <Version>2.5.0</Version>
+    <InformationalVersion>2.5.0</InformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <AssemblyVersion>2.5.0.0</AssemblyVersion>
+    <FileVersion>2.5.0.0</FileVersion>
+    <AssemblyTitle>ClippyCat</AssemblyTitle>
+    <Product>ClippyCat</Product>
+    <Title>ClippyCat</Title>
+    <Description>A lightweight Windows desktop pet.</Description>
+    <Authors>ClippyCat Project</Authors>
+    <Company>ClippyCat Project</Company>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>false</PublishSingleFile>
+    <PublishTrimmed>false</PublishTrimmed>
+    <DebugSymbols>false</DebugSymbols>
+    <DebugType>none</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="Assets\**\*" Exclude="Assets\backups\**\*">
+    <Content Include="Assets\Marmalade\spritesheet.png;Assets\Merry\spritesheet.png;Assets\actions\actions.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>
   </ItemGroup>
 

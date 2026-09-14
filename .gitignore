@@ -2,6 +2,9 @@
 bin/
 obj/
 
+# Generated standalone publish and installer output
+artifacts/
+
 # Visual Studio / IDE
 .vs/
 *.user

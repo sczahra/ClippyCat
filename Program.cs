@@ -87,9 +87,9 @@ internal sealed class PetApplicationContext : ApplicationContext
         aboutItem.Click += (_, _) =>
         {
             MessageBox.Show(
-                "Marmalade Desktop Pet\nVersion 2.3\n\n" +
-                "Visual actions now load entirely from\n" +
-                "the action manifest and source-frame pipeline.",
+                "ClippyCat\nVersion 2.5\n\n" +
+                "A standalone Windows desktop pet with\n" +
+                "manifest-driven visual actions.",
                 "About",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Information

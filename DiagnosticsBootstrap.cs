@@ -30,7 +30,7 @@ internal static class DiagnosticsBootstrap
     [ModuleInitializer]
     internal static void InitializeModule()
     {
-        PetDiagnostics.Initialize("1.4");
+        PetDiagnostics.Initialize("2.5");
         Application.ThreadException += (_, e) => PetDiagnostics.Error("THREAD_EXCEPTION", e.Exception);
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
         {
