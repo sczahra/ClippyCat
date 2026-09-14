@@ -63,11 +63,11 @@ To compile the normal Windows installer after installing Inno Setup 6:
 .\Build-Installer.ps1
 ```
 
-The installer is written to `artifacts\installer\ClippyCatSetup-2.5.0.exe`. Generated publish and installer payloads are intentionally excluded from Git.
+The installer and checksum are written to `artifacts\installer\ClippyCatSetup-2.6.0.exe` and `artifacts\installer\ClippyCatSetup-2.6.0.exe.sha256`. Generated publish and installer payloads are intentionally excluded from Git.
 
 ## Installing ClippyCat
 
-Run `ClippyCatSetup-2.5.0.exe`, then launch **ClippyCat** from the Start Menu or the optional Desktop shortcut. The installed copy is self-contained: end users do not need the .NET runtime, Git, PowerShell, the source repository, or development tools.
+Run `ClippyCatSetup-2.6.0.exe`, then launch **ClippyCat** from the Start Menu or the optional Desktop shortcut. The installed copy is self-contained: end users do not need the .NET runtime, Git, PowerShell, the source repository, or development tools.
 
 ClippyCat installs per user under `%LOCALAPPDATA%\Programs\ClippyCat`, appears in Windows Installed Apps / Add or Remove Programs, and includes an uninstaller. Uninstall removes application files but preserves preferences and diagnostics under `%LOCALAPPDATA%\MarmaladeDesktopPet`. To remove user data manually, exit ClippyCat and delete that folder.
 
@@ -76,6 +76,22 @@ The release stages are deliberately separate:
 - Development: source frames → importer → development build
 - Release: source tree → importer → self-contained publish → installer
 - Runtime: installed executable launches directly with no repository or importer dependency
+
+## Updating ClippyCat
+
+ClippyCat performs one non-blocking stable-release check after startup, or you can choose **Check for Updates...** from the tray menu. When a newer version is available, ClippyCat shows the installed and available versions plus a short release-note summary. Installation begins only after the user chooses **Download and Install**.
+
+Updates come only from this repository's GitHub Releases. ClippyCat requires matching `ClippyCatSetup-X.Y.Z.exe` and `ClippyCatSetup-X.Y.Z.exe.sha256` release assets, downloads them to its per-user LocalAppData update folder, and verifies the installer SHA-256 before Windows opens it. Network, metadata, download, or integrity failures leave the current version running. Existing settings remain under `%LOCALAPPDATA%\MarmaladeDesktopPet` across installer upgrades.
+
+## Release process
+
+1. Set the project version and build the installer with `./Build-Installer.ps1`.
+2. Independently verify the generated installer and SHA-256 file under `artifacts\installer`.
+3. Create a GitHub Release tagged `vX.Y.Z` with title `ClippyCat vX.Y.Z`.
+4. Upload both `ClippyCatSetup-X.Y.Z.exe` and `ClippyCatSetup-X.Y.Z.exe.sha256` to that release.
+5. Confirm an installed older version detects the release, verifies the checksum, launches the installer, upgrades successfully, and retains its settings.
+
+Drafts and prereleases are not offered by the current stable updater. Building locally does not publish a GitHub Release automatically.
 
 ## Adding a visual action without code changes
 

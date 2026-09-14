@@ -28,6 +28,12 @@ internal sealed class PetApplicationContext : ApplicationContext
     private readonly ToolStripMenuItem pauseItem;
     private readonly ToolStripMenuItem marmaladeItem;
     private readonly ToolStripMenuItem merryItem;
+    private readonly ToolStripMenuItem checkForUpdatesItem;
+    private readonly UpdateService updateService = new();
+    private System.Windows.Forms.Timer? startupUpdateTimer;
+    private bool updateCheckInProgress;
+    private bool automaticUpdatePromptShown;
+    private bool isQuitting;
 
     public PetApplicationContext()
     {
@@ -84,11 +90,14 @@ internal sealed class PetApplicationContext : ApplicationContext
         var settingsItem = new ToolStripMenuItem("Settings...");
         settingsItem.Click += (_, _) => ShowSettings();
 
+        checkForUpdatesItem = new ToolStripMenuItem("Check for Updates...");
+        checkForUpdatesItem.Click += async (_, _) => await CheckForUpdatesAsync(isAutomatic: false);
+
         var aboutItem = new ToolStripMenuItem("About");
         aboutItem.Click += (_, _) =>
         {
             MessageBox.Show(
-                "ClippyCat\nVersion 2.5\n\n" +
+                $"ClippyCat\nVersion {UpdateService.CurrentVersion.Major}.{UpdateService.CurrentVersion.Minor}\n\n" +
                 "A standalone Windows desktop pet with\n" +
                 "manifest-driven visual actions.",
                 "About",
@@ -111,6 +120,7 @@ internal sealed class PetApplicationContext : ApplicationContext
         trayMenu.Items.Add(doSomethingItem);
         trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(settingsItem);
+        trayMenu.Items.Add(checkForUpdatesItem);
         trayMenu.Items.Add(aboutItem);
         trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(quitItem);
@@ -132,6 +142,7 @@ internal sealed class PetApplicationContext : ApplicationContext
 
         UpdatePetChecks();
         petForm.ShowPet();
+        ScheduleStartupUpdateCheck();
     }
 
     private static Icon? LoadTrayIcon()
@@ -180,8 +191,91 @@ internal sealed class PetApplicationContext : ApplicationContext
         UpdatePetChecks();
     }
 
+    private void ScheduleStartupUpdateCheck()
+    {
+        startupUpdateTimer = new System.Windows.Forms.Timer { Interval = 4000 };
+        startupUpdateTimer.Tick += StartupUpdateTimer_Tick;
+        startupUpdateTimer.Start();
+    }
+
+    private async void StartupUpdateTimer_Tick(object? sender, EventArgs e)
+    {
+        startupUpdateTimer?.Stop();
+        startupUpdateTimer?.Dispose();
+        startupUpdateTimer = null;
+        await CheckForUpdatesAsync(isAutomatic: true);
+    }
+
+    private async Task CheckForUpdatesAsync(bool isAutomatic)
+    {
+        if (updateCheckInProgress || isQuitting)
+            return;
+
+        updateCheckInProgress = true;
+        checkForUpdatesItem.Enabled = false;
+        checkForUpdatesItem.Text = "Checking for Updates...";
+
+        try
+        {
+            UpdateInfo? update = await updateService.CheckForUpdateAsync();
+            if (update is null)
+            {
+                if (!isAutomatic)
+                {
+                    MessageBox.Show(
+                        "You're running the latest version of ClippyCat.",
+                        "ClippyCat Update",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                }
+
+                return;
+            }
+
+            if (isAutomatic && automaticUpdatePromptShown)
+                return;
+
+            automaticUpdatePromptShown = true;
+            using var dialog = new UpdateDialog(updateService, update);
+            dialog.ShowDialog();
+
+            if (dialog.InstallerLaunched)
+                QuitApplication();
+        }
+        catch (Exception ex)
+        {
+            PetDiagnostics.Error("UPDATE_ERROR", ex);
+
+            if (!isAutomatic)
+            {
+                MessageBox.Show(
+                    ex is UpdateException ? ex.Message : "ClippyCat couldn't check for updates right now.",
+                    "ClippyCat Update",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+        finally
+        {
+            updateCheckInProgress = false;
+
+            if (!isQuitting)
+            {
+                checkForUpdatesItem.Enabled = true;
+                checkForUpdatesItem.Text = "Check for Updates...";
+            }
+        }
+    }
+
     private void QuitApplication()
     {
+        if (isQuitting)
+            return;
+
+        isQuitting = true;
+        startupUpdateTimer?.Stop();
+        startupUpdateTimer?.Dispose();
+        startupUpdateTimer = null;
         trayIcon.Visible = false;
         petForm.AllowClose();
         petForm.Close();

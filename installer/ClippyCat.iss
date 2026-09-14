@@ -1,5 +1,7 @@
 #define MyAppName "ClippyCat"
-#define MyAppVersion "2.5.0"
+#ifndef MyAppVersion
+  #define MyAppVersion "2.6.0"
+#endif
 #define MyAppPublisher "ClippyCat Project"
 #define MyAppExeName "MarmaladeDesktopPet.exe"
 
@@ -30,7 +32,7 @@ ArchitecturesAllowed=x64
 ArchitecturesInstallIn64BitMode=x64
 MinVersion=10.0
 OutputDir={#OutputDir}
-OutputBaseFilename=ClippyCatSetup-2.5.0
+OutputBaseFilename=ClippyCatSetup-{#MyAppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
