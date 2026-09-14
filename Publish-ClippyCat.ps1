@@ -57,6 +57,8 @@ $requiredPaths = @(
     $expectedExecutable,
     (Join-Path $publishRoot "Assets"),
     (Join-Path $publishRoot "Assets\actions\actions.json"),
+    (Join-Path $publishRoot "Assets\Icon\ClippyCatAppIcon.ico"),
+    (Join-Path $publishRoot "Assets\Icon\ClippyCatTrayIcon.ico"),
     (Join-Path $publishRoot "Assets\Marmalade\spritesheet.png"),
     (Join-Path $publishRoot "Assets\Merry\spritesheet.png")
 )

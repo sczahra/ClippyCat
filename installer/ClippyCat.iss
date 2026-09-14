@@ -34,6 +34,7 @@ OutputBaseFilename=ClippyCatSetup-2.5.0
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=..\Assets\Icon\ClippyCatAppIcon.ico
 UninstallDisplayName={#MyAppName}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 CloseApplications=yes

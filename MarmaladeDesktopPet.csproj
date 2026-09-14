@@ -15,6 +15,7 @@
     <AssemblyTitle>ClippyCat</AssemblyTitle>
     <Product>ClippyCat</Product>
     <Title>ClippyCat</Title>
+    <ApplicationIcon>Assets\Icon\ClippyCatAppIcon.ico</ApplicationIcon>
     <Description>A lightweight Windows desktop pet.</Description>
     <Authors>ClippyCat Project</Authors>
     <Company>ClippyCat Project</Company>
@@ -30,7 +31,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="Assets\Marmalade\spritesheet.png;Assets\Merry\spritesheet.png;Assets\actions\actions.json">
+    <Content Include="Assets\Marmalade\spritesheet.png;Assets\Merry\spritesheet.png;Assets\actions\actions.json;Assets\Icon\ClippyCatAppIcon.ico;Assets\Icon\ClippyCatTrayIcon.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </Content>

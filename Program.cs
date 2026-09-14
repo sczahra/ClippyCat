@@ -22,6 +22,7 @@ internal sealed class PetApplicationContext : ApplicationContext
 {
     private readonly PetForm petForm;
     private readonly NotifyIcon trayIcon;
+    private readonly Icon? loadedTrayIcon;
     private readonly ContextMenuStrip trayMenu;
     private readonly ToolStripMenuItem hideShowItem;
     private readonly ToolStripMenuItem pauseItem;
@@ -114,10 +115,11 @@ internal sealed class PetApplicationContext : ApplicationContext
         trayMenu.Items.Add(new ToolStripSeparator());
         trayMenu.Items.Add(quitItem);
 
+        loadedTrayIcon = LoadTrayIcon();
         trayIcon = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
-            Text = "Marmalade Desktop Pet",
+            Icon = loadedTrayIcon ?? SystemIcons.Application,
+            Text = "ClippyCat",
             ContextMenuStrip = trayMenu,
             Visible = true
         };
@@ -130,6 +132,24 @@ internal sealed class PetApplicationContext : ApplicationContext
 
         UpdatePetChecks();
         petForm.ShowPet();
+    }
+
+    private static Icon? LoadTrayIcon()
+    {
+        string iconPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "Assets",
+            "Icon",
+            "ClippyCatTrayIcon.ico");
+
+        try
+        {
+            return File.Exists(iconPath) ? new Icon(iconPath) : null;
+        }
+        catch (Exception ex) when (ex is ArgumentException or IOException)
+        {
+            return null;
+        }
     }
 
     private void SelectPet(string petName)
@@ -166,6 +186,7 @@ internal sealed class PetApplicationContext : ApplicationContext
         petForm.AllowClose();
         petForm.Close();
         trayIcon.Dispose();
+        loadedTrayIcon?.Dispose();
         trayMenu.Dispose();
         ExitThread();
     }
