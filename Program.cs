@@ -97,8 +97,7 @@ internal sealed class PetApplicationContext : ApplicationContext
         aboutItem.Click += (_, _) =>
         {
             MessageBox.Show(
-                $"ClippyCat\nVersion {UpdateService.CurrentVersionText}\n" +
-                "Updater validation release\n\n" +
+                $"ClippyCat\nVersion {UpdateService.CurrentVersionText}\n\n" +
                 "A standalone Windows desktop pet with\n" +
                 "manifest-driven visual actions.",
                 "About",

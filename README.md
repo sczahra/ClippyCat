@@ -63,11 +63,11 @@ To compile the normal Windows installer after installing Inno Setup 6:
 .\Build-Installer.ps1
 ```
 
-The installer and checksum are written to `artifacts\installer\ClippyCatSetup-2.6.1.exe` and `artifacts\installer\ClippyCatSetup-2.6.1.exe.sha256`. Generated publish and installer payloads are intentionally excluded from Git.
+The installer and checksum are written to `artifacts\installer\ClippyCatSetup-2.6.2.exe` and `artifacts\installer\ClippyCatSetup-2.6.2.exe.sha256`. Generated publish and installer payloads are intentionally excluded from Git.
 
 ## Installing ClippyCat
 
-Run `ClippyCatSetup-2.6.1.exe`, then launch **ClippyCat** from the Start Menu or the optional Desktop shortcut. The installed copy is self-contained: end users do not need the .NET runtime, Git, PowerShell, the source repository, or development tools.
+Run `ClippyCatSetup-2.6.2.exe`, then launch **ClippyCat** from the Start Menu or the optional Desktop shortcut. The installed copy is self-contained: end users do not need the .NET runtime, Git, PowerShell, the source repository, or development tools.
 
 ClippyCat installs per user under `%LOCALAPPDATA%\Programs\ClippyCat`, appears in Windows Installed Apps / Add or Remove Programs, and includes an uninstaller. Uninstall removes application files but preserves preferences and diagnostics under `%LOCALAPPDATA%\MarmaladeDesktopPet`. To remove user data manually, exit ClippyCat and delete that folder.
 
