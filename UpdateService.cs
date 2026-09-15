@@ -77,7 +77,7 @@ internal sealed class UpdateService
 
     public async Task<UpdateDownloadResult> DownloadAndVerifyAsync(
         UpdateInfo update,
-        IProgress<int>? progress = null,
+        IProgress<UpdateProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
         string updateDirectory = Path.Combine(
@@ -99,6 +99,7 @@ internal sealed class UpdateService
         PetDiagnostics.Log(
             "UPDATE_DOWNLOAD",
             $"started version={FormatVersion(update.AvailableVersion)} file={update.InstallerFileName}");
+        progress?.Report(new UpdateProgress(UpdateProgressStage.Downloading));
 
         try
         {
@@ -124,6 +125,7 @@ internal sealed class UpdateService
             if (installerBytes == 0)
                 throw new UpdateException("The downloaded installer is empty.");
 
+            progress?.Report(new UpdateProgress(UpdateProgressStage.Verifying));
             string actualSha256 = await ComputeSha256Async(installerPartialPath, cancellationToken);
             PetDiagnostics.Log(
                 "UPDATE_DOWNLOAD",
@@ -143,7 +145,6 @@ internal sealed class UpdateService
 
             File.Move(checksumPartialPath, checksumPath, overwrite: true);
             File.Move(installerPartialPath, installerPath, overwrite: true);
-            progress?.Report(100);
 
             return new UpdateDownloadResult(installerPath, expectedSha256, actualSha256);
         }
@@ -338,7 +339,7 @@ internal sealed class UpdateService
         Uri uri,
         string destinationPath,
         long maximumBytes,
-        IProgress<int>? progress,
+        IProgress<UpdateProgress>? progress,
         CancellationToken cancellationToken)
     {
         using HttpResponseMessage response = await HttpClient.GetAsync(
@@ -373,7 +374,10 @@ internal sealed class UpdateService
             await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken);
 
             if (contentLength is > 0 && progress is not null)
-                progress.Report((int)Math.Clamp(totalBytes * 100 / contentLength.Value, 0, 99));
+            {
+                int percent = (int)Math.Clamp(totalBytes * 100 / contentLength.Value, 0, 100);
+                progress.Report(new UpdateProgress(UpdateProgressStage.Downloading, percent));
+            }
         }
 
         await destination.FlushAsync(cancellationToken);
@@ -467,6 +471,14 @@ internal sealed record UpdateDownloadResult(
     string InstallerPath,
     string ExpectedSha256,
     string ActualSha256);
+
+internal enum UpdateProgressStage
+{
+    Downloading,
+    Verifying
+}
+
+internal sealed record UpdateProgress(UpdateProgressStage Stage, int? Percentage = null);
 
 internal sealed class UpdateException : Exception
 {

@@ -136,19 +136,34 @@ internal sealed class UpdateDialog : Form
 
         busy = true;
         installButton.Enabled = false;
+        laterButton.Enabled = false;
         laterButton.DialogResult = DialogResult.None;
-        laterButton.Text = "Cancel";
         progressBar.Value = 0;
         progressBar.Style = ProgressBarStyle.Marquee;
         progressBar.Visible = true;
-        statusLabel.Text = "Downloading the verified ClippyCat installer...";
+        statusLabel.Text = "Downloading update...";
         downloadCancellation = new CancellationTokenSource();
 
-        var progress = new Progress<int>(percent =>
+        var progress = new Progress<UpdateProgress>(updateProgress =>
         {
-            progressBar.Style = ProgressBarStyle.Continuous;
-            progressBar.Value = Math.Clamp(percent, progressBar.Minimum, progressBar.Maximum);
-            statusLabel.Text = $"Downloading the verified ClippyCat installer... {percent}%";
+            if (updateProgress.Stage == UpdateProgressStage.Verifying)
+            {
+                progressBar.Style = ProgressBarStyle.Marquee;
+                statusLabel.Text = "Verifying update...";
+                return;
+            }
+
+            if (updateProgress.Percentage is int percent)
+            {
+                progressBar.Style = ProgressBarStyle.Continuous;
+                progressBar.Value = Math.Clamp(percent, progressBar.Minimum, progressBar.Maximum);
+                statusLabel.Text = $"Downloading update... {percent}%";
+            }
+            else
+            {
+                progressBar.Style = ProgressBarStyle.Marquee;
+                statusLabel.Text = "Downloading update...";
+            }
         });
 
         try
@@ -158,9 +173,9 @@ internal sealed class UpdateDialog : Form
                 progress,
                 downloadCancellation.Token);
 
-            statusLabel.Text = "SHA-256 verified. Opening the installer...";
-            progressBar.Style = ProgressBarStyle.Continuous;
-            progressBar.Value = 100;
+            statusLabel.Text = "Starting installer...";
+            progressBar.Style = ProgressBarStyle.Marquee;
+            await Task.Yield();
 
             await updateService.LaunchVerifiedInstallerAsync(download, downloadCancellation.Token);
             InstallerLaunched = true;
